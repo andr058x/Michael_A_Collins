@@ -531,42 +531,12 @@
     gap:28px;
     border-top:1px solid var(--paper-line);
   }
-  .footer-newsletter{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-end;
-    gap:24px;
-    flex-wrap:wrap;
-  }
-  .footer-newsletter-copy{ max-width:40ch; }
-  .footer-newsletter-copy p{ color:var(--ink-soft); font-size:0.92rem; margin:8px 0 0; }
-  .newsletter-form{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .newsletter-form input{
-    font-family:var(--font-body);
-    font-size:0.95rem;
-    color:var(--ink);
-    background:var(--paper-card);
-    border:1px solid var(--paper-line);
-    border-radius:8px;
-    padding:11px 14px;
-    outline:none;
-    min-width:220px;
-    transition:border-color .15s ease;
-  }
-  .newsletter-form input::placeholder{ color:var(--ink-faint); }
-  .newsletter-form input:focus{ border-color:var(--blue); }
   .footer-bottom{
     display:flex;
     justify-content:space-between;
     align-items:center;
     flex-wrap:wrap;
     gap:14px;
-    padding-top:24px;
-    border-top:1px solid var(--paper-line);
   }
   footer .label{ margin:0; color:var(--ink-faint); }
   .social-links{ display:flex; align-items:center; gap:18px; }
@@ -754,19 +724,6 @@
 </main>
 
 <footer id="contatti">
-  <div class="footer-newsletter">
-    <div class="footer-newsletter-copy">
-      <span class="label">Newsletter</span>
-      <p>Get an email whenever a new book comes out or a new early-access round opens for the reader team.</p>
-    </div>
-    <div>
-      <form class="newsletter-form" id="newsletter-form" novalidate>
-        <input type="email" id="newsletter-email" name="email" placeholder="Your email" required autocomplete="email">
-        <button type="submit" class="btn btn-ghost">Subscribe</button>
-      </form>
-      <span class="arc-status" id="newsletter-status" aria-live="polite"></span>
-    </div>
-  </div>
   <div class="footer-bottom">
     <p class="label">&copy; <span id="year"></span> Micheal A. Collins</p>
     <div class="social-links">
@@ -949,27 +906,6 @@
   });
 
   /* =====================================================================
-     NEWSLETTER SIGNUP
-     ===================================================================== */
-  var newsletterForm = document.getElementById('newsletter-form');
-  var newsletterStatus = document.getElementById('newsletter-status');
-
-  newsletterForm.addEventListener('submit', function(evt){
-    evt.preventDefault();
-    if (!newsletterForm.reportValidity()) { return; }
-
-    var email = document.getElementById('newsletter-email').value.trim();
-    var subject = "Sign me up for the newsletter";
-    var body = "Email to subscribe to the newsletter: " + email;
-    var mailto = "mailto:micheal.a.collins.author@gmail.com" +
-      "?subject=" + encodeURIComponent(subject) +
-      "&body=" + encodeURIComponent(body);
-
-    window.location.href = mailto;
-    newsletterStatus.textContent = "Opening your email app…";
-  });
-
-  /* =====================================================================
      AUTHOR PANEL
      Hidden by default (opens from the "Author Panel" link in the
      footer). The password is now checked by api.php on the server,
@@ -1146,3 +1082,4 @@
 </script>
 </body>
 </html>
+
