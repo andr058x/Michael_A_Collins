@@ -23,6 +23,15 @@ session_set_cookie_params([
 ]);
 session_start();
 
+function columnExists(PDO $pdo, string $table, string $column): bool {
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+    );
+    $stmt->execute([':table' => $table, ':column' => $column]);
+    return (int) $stmt->fetchColumn() > 0;
+}
+
 function db(): PDO {
     static $pdo = null;
     if ($pdo === null) {
@@ -84,10 +93,15 @@ function ensureSchema(PDO $pdo): void {
 
     // Migrazioni leggere e idempotenti per i database creati prima
     // dell'introduzione delle copie PDF: aggiungono le colonne mancanti
-    // senza toccare i dati già presenti. IF NOT EXISTS rende sicuro
-    // rieseguirle ad ogni deploy.
-    $pdo->exec('ALTER TABLE books ADD COLUMN IF NOT EXISTS pdf VARCHAR(255) DEFAULT NULL');
-    $pdo->exec('ALTER TABLE reader_requests ADD COLUMN IF NOT EXISTS book_id INT UNSIGNED DEFAULT NULL');
+    // senza toccare i dati già presenti. Il MySQL di Railway non supporta
+    // la sintassi "ADD COLUMN IF NOT EXISTS", quindi controlliamo prima
+    // noi se la colonna c'è già.
+    if (!columnExists($pdo, 'books', 'pdf')) {
+        $pdo->exec('ALTER TABLE books ADD COLUMN pdf VARCHAR(255) DEFAULT NULL');
+    }
+    if (!columnExists($pdo, 'reader_requests', 'book_id')) {
+        $pdo->exec('ALTER TABLE reader_requests ADD COLUMN book_id INT UNSIGNED DEFAULT NULL');
+    }
 
     static $checkedSeed = false;
     if ($checkedSeed) {
