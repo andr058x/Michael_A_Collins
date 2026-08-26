@@ -682,8 +682,8 @@
         <div class="admin-grid">
           <form class="admin-form" id="admin-add-form" novalidate>
             <div class="field">
-              <label for="admin-title">Book title</label>
-              <input type="text" id="admin-title" name="title" placeholder="Title" required>
+              <label for="admin-title">Book title (optional)</label>
+              <input type="text" id="admin-title" name="title" placeholder="Leave blank if it's already on the cover">
             </div>
             <div class="admin-form-row">
               <div class="field">
@@ -764,19 +764,30 @@
      ===================================================================== */
   var books = [];
 
+  /* Some books are added with a cover image only, no typed title (the
+     title is already readable on the cover, so retyping it would just be
+     a repeat). Anywhere the UI needs a text label for such a book, this
+     gives a sensible fallback instead of showing a blank string. */
+  function bookLabel(book){
+    if (book.title) { return book.title; }
+    return book.index ? ('Untitled (' + book.index + ')') : 'Untitled book';
+  }
+
   function renderBookCard(book){
     var card = document.createElement('article');
     card.className = 'book-card';
 
     var chipHtml = book.sample ? '<span class="sample-chip">Sample</span>' : '';
+    var altText = book.title ? ('Cover of ' + book.title) : 'Book cover';
     var visualHtml = book.cover
-      ? '<img class="book-cover-img" src="' + escapeHtml(book.cover) + '" alt="Cover of ' + escapeHtml(book.title) + '">'
+      ? '<img class="book-cover-img" src="' + escapeHtml(book.cover) + '" alt="' + escapeHtml(altText) + '">'
       : '<div class="book-index">' + escapeHtml(book.index || '') + '</div>';
+    var titleHtml = book.title ? ('<h3 class="book-title">' + escapeHtml(book.title) + '</h3>') : '';
 
     card.innerHTML =
       chipHtml +
       visualHtml +
-      '<h3 class="book-title">' + escapeHtml(book.title) + '</h3>' +
+      titleHtml +
       '<div class="book-meta">' + escapeHtml(book.year || '') + '</div>' +
       '<p class="book-blurb">' + escapeHtml(book.blurb || '') + '</p>' +
       '<a class="book-link" href="' + escapeHtml(book.link || '#') + '">Learn more <span class="arrow">&rarr;</span></a>';
@@ -817,8 +828,9 @@
     select.appendChild(anyOption);
     books.forEach(function(book){
       var opt = document.createElement('option');
-      opt.value = book.title;
-      opt.textContent = book.title;
+      var label = bookLabel(book);
+      opt.value = label;
+      opt.textContent = label;
       select.appendChild(opt);
     });
     if (previous) { select.value = previous; }
@@ -833,7 +845,7 @@
     row.innerHTML =
       thumbHtml +
       '<div class="admin-row-info">' +
-        '<div class="admin-row-title">' + escapeHtml(book.title) + '</div>' +
+        '<div class="admin-row-title">' + escapeHtml(bookLabel(book)) + '</div>' +
         '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + '</div>' +
       '</div>' +
       '<button type="button" class="admin-remove-btn" data-id="' + escapeHtml(book.id) + '">Remove</button>';
@@ -1006,7 +1018,11 @@
     if (!adminAddForm.reportValidity()) { return; }
 
     var title = document.getElementById('admin-title').value.trim();
-    if (!title) { return; }
+    var file = adminCoverInput.files && adminCoverInput.files[0];
+    if (!title && !file) {
+      adminStatus.textContent = 'Add a title, a cover image, or both.';
+      return;
+    }
 
     var formData = new FormData();
     formData.set('action', 'add');
@@ -1015,7 +1031,6 @@
     formData.set('index', document.getElementById('admin-index').value.trim());
     formData.set('blurb', document.getElementById('admin-blurb').value.trim());
     formData.set('link', document.getElementById('admin-link').value.trim());
-    var file = adminCoverInput.files && adminCoverInput.files[0];
     if (file) { formData.set('cover', file); }
 
     adminStatus.textContent = 'Saving…';
@@ -1039,6 +1054,8 @@
           showAdminLocked();
         } else if (r.data && r.data.error === 'invalid_image') {
           adminStatus.textContent = "I couldn't read that image. Try a different cover, or skip the cover.";
+        } else if (r.data && r.data.error === 'missing_title_or_cover') {
+          adminStatus.textContent = 'Add a title, a cover image, or both.';
         } else {
           adminStatus.textContent = "Couldn't save. Please try again.";
         }
@@ -1054,7 +1071,7 @@
     var id = btn.getAttribute('data-id');
     var book = books.filter(function(b){ return String(b.id) === String(id); })[0];
     if (!book) { return; }
-    if (!window.confirm('Remove "' + book.title + '" from the catalog?')) { return; }
+    if (!window.confirm('Remove "' + bookLabel(book) + '" from the catalog?')) { return; }
 
     var body = new URLSearchParams();
     body.set('action', 'remove');
@@ -1082,4 +1099,3 @@
 </script>
 </body>
 </html>
-
