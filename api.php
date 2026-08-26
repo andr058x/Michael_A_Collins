@@ -217,9 +217,6 @@ try {
             requireAdmin();
 
             $title = trim((string) ($_POST['title'] ?? ''));
-            if ($title === '') {
-                out(['error' => 'missing_title'], 400);
-            }
             $year = trim((string) ($_POST['year'] ?? ''));
             $code = trim((string) ($_POST['index'] ?? ''));
             $blurb = trim((string) ($_POST['blurb'] ?? ''));
@@ -231,6 +228,14 @@ try {
                 if ($coverName === false) {
                     out(['error' => 'invalid_image'], 400);
                 }
+            }
+
+            // Il titolo non è più obbligatorio: spesso è già leggibile sulla
+            // copertina stessa, quindi scriverlo di nuovo sarebbe ridondante.
+            // Serve però almeno uno tra titolo e copertina, altrimenti la
+            // scheda del libro sarebbe completamente vuota.
+            if ($title === '' && $coverName === null) {
+                out(['error' => 'missing_title_or_cover'], 400);
             }
 
             $maxOrder = (int) db()->query('SELECT COALESCE(MAX(sort_order), 0) FROM books')->fetchColumn();
