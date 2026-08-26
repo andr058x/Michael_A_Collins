@@ -312,6 +312,54 @@ function sendEmail(string $toEmail, string $toName, string $subject, string $htm
     return true;
 }
 
+/**
+ * Registra (o aggiorna, se già esiste) il lettore come contatto Brevo
+ * dentro BREVO_READER_LIST_ID, con il titolo e il link del libro come
+ * attributi personalizzati. Serve solo per l'automazione "chiedi la
+ * recensione dopo qualche giorno" che si configura dentro Brevo — qui ci
+ * limitiamo a mettere il contatto nella lista giusta con le informazioni
+ * per personalizzare quell'email.
+ */
+function addBrevoContact(string $email, string $name, string $bookTitle, string $bookLink): bool {
+    if (BREVO_API_KEY === '') {
+        return false;
+    }
+
+    $payload = json_encode([
+        'email' => $email,
+        'attributes' => [
+            'FIRSTNAME' => $name,
+            'BOOK_TITLE' => $bookTitle,
+            'BOOK_LINK' => $bookLink,
+        ],
+        'listIds' => [BREVO_READER_LIST_ID],
+        'updateEnabled' => true,
+    ]);
+
+    $ch = curl_init('https://api.brevo.com/v3/contacts');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => [
+            'accept: application/json',
+            'api-key: ' . BREVO_API_KEY,
+            'content-type: application/json',
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+    ]);
+    $result = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($status < 200 || $status >= 300) {
+        error_log('addBrevoContact failed (status ' . $status . '): ' . ($curlErr ?: $result));
+        return false;
+    }
+    return true;
+}
+
 function rowToRequest(array $r): array {
     return [
         'id' => (int) $r['id'],
@@ -472,7 +520,7 @@ try {
             // nel pannello e potrà seguire a mano.
             $requestedBook = null;
             if ($bookId) {
-                $bookStmt = db()->prepare('SELECT title, pdf FROM books WHERE id = :id');
+                $bookStmt = db()->prepare('SELECT title, pdf, link FROM books WHERE id = :id');
                 $bookStmt->execute([':id' => $bookId]);
                 $requestedBook = $bookStmt->fetch() ?: null;
             }
@@ -504,6 +552,13 @@ try {
                     '<p>Thanks again,<br>Micheal</p>';
             }
             sendEmail($email, $name, 'Your free copy from Micheal A. Collins', $readerHtml);
+
+            // Contatto Brevo per l'automazione "chiedi la recensione dopo
+            // qualche giorno" (configurata dentro Brevo, non qui).
+            $bookLinkForBrevo = ($requestedBook && $requestedBook['link'] && $requestedBook['link'] !== '#')
+                ? $requestedBook['link']
+                : '';
+            addBrevoContact($email, $name, $bookTitle, $bookLinkForBrevo);
 
             out(['ok' => true]);
             break;

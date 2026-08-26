@@ -57,3 +57,7 @@ define('EMAIL_FROM_NAME', getenv('EMAIL_FROM_NAME') ?: 'Micheal A. Collins');
 // richieste del Reader Team continuano a salvarsi regolarmente nel
 // pannello autore — semplicemente non parte nessuna email.
 define('BREVO_API_KEY', getenv('BREVO_API_KEY') ?: '');
+// La lista Brevo ("Reader Team") in cui finisce ogni persona che richiede
+// un libro: serve per l'automazione che chiede la recensione qualche
+// giorno dopo, impostata direttamente dentro Brevo (non nel codice).
+define('BREVO_READER_LIST_ID', (int) (getenv('BREVO_READER_LIST_ID') ?: 2));
