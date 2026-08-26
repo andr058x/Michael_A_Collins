@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Micheal A. Collins</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ---------- Tokens ---------- */
+  :root{
+    --ink:#12151F;
+    --ink-soft:#4B5266;
+    --ink-faint:#8890A3;
+    --paper:#FFFFFF;
+    --paper-card:#F5F7FB;
+    --paper-card-hi:#EDF1FA;
+    --paper-line:#E3E7F0;
+    --blue:#1F3C88;
+    --blue-deep:#152C66;
+    --blue-ink:#F6F8FF;
+    --amber:#B8702E;
+    --amber-deep:#93591F;
+    --danger:#B3432E;
+    --shadow-card: 0 16px 32px -20px rgba(31,60,136,0.28);
+    --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body:'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EEF1F8;
+      --ink-soft:#A9B0C4;
+      --ink-faint:#6B7488;
+      --paper:#0B0E16;
+      --paper-card:#131826;
+      --paper-card-hi:#1A2032;
+      --paper-line:#242B3E;
+      --blue:#7092EC;
+      --blue-deep:#8FA9F1;
+      --blue-ink:#0A1020;
+      --amber:#DE9B5B;
+      --amber-deep:#EBB37D;
+      --danger:#E1806A;
+      --shadow-card: 0 16px 32px -18px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#EEF1F8;
+    --ink-soft:#A9B0C4;
+    --ink-faint:#6B7488;
+    --paper:#0B0E16;
+    --paper-card:#131826;
+    --paper-card-hi:#1A2032;
+    --paper-line:#242B3E;
+    --blue:#7092EC;
+    --blue-deep:#8FA9F1;
+    --blue-ink:#0A1020;
+    --amber:#DE9B5B;
+    --amber-deep:#EBB37D;
+    --danger:#E1806A;
+    --shadow-card: 0 16px 32px -18px rgba(0,0,0,0.55);
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--blue); color:var(--blue-ink); }
+  a{ color:inherit; }
+  img{ max-width:100%; display:block; }
+  :focus-visible{ outline:2px solid var(--blue); outline-offset:3px; }
+
+  h1,h2,h3{ font-family:var(--font-display); font-weight:600; text-wrap:balance; margin:0; }
+
+  .wrap{ max-width:1120px; margin:0 auto; padding:0 clamp(20px, 5vw, 56px); }
+
+  .label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--blue);
+  }
+
+  /* ---------- Header ---------- */
+  header.site{
+    padding:26px clamp(20px,5vw,56px);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .brandmark{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:1.05rem;
+    letter-spacing:0.01em;
+  }
+  .brandmark span{ color:var(--blue); }
+  nav.site a{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    text-decoration:none;
+    color:var(--ink-soft);
+    margin-left:clamp(14px,2vw,28px);
+    transition:color .15s ease;
+  }
+  nav.site a:hover{ color:var(--blue); }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:clamp(56px,9vw,104px) 0 clamp(72px,10vw,128px);
+    position:relative;
+    overflow:hidden;
+  }
+  .hero-blob{
+    position:absolute;
+    top:-18%;
+    right:-8%;
+    width:min(58vw, 640px);
+    height:min(58vw, 640px);
+    border-radius:50%;
+    background:radial-gradient(circle at 40% 40%, color-mix(in srgb, var(--blue) 22%, transparent), transparent 68%);
+    pointer-events:none;
+    animation:drift 14s ease-in-out infinite alternate;
+  }
+  @keyframes drift{
+    from{ transform:translate(0,0) scale(1); }
+    to{ transform:translate(-2%, 3%) scale(1.05); }
+  }
+  .hero-inner{ position:relative; }
+  .hero-eyebrow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:20px;
+  }
+  .hero h1{
+    font-size:clamp(2.8rem, 7vw, 5.1rem);
+    line-height:1.01;
+    letter-spacing:-0.015em;
+    max-width:14ch;
+  }
+  .hero h1 em{
+    font-style:italic;
+    color:var(--blue);
+  }
+  .hero-tagline{
+    font-family:var(--font-display);
+    font-style:italic;
+    font-weight:500;
+    font-size:clamp(1.1rem, 2.1vw, 1.4rem);
+    color:var(--ink-soft);
+    margin:20px 0 24px;
+    max-width:36ch;
+  }
+  .hero-bio{
+    max-width:58ch;
+    color:var(--ink-soft);
+    font-size:1.03rem;
+  }
+  .hero-bio em{ color:var(--ink-faint); font-style:normal; }
+  .hero-cta{
+    margin-top:32px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+  }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--font-mono);
+    font-size:0.8rem;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    text-decoration:none;
+    padding:14px 24px;
+    border-radius:8px;
+    border:1px solid transparent;
+    transition:transform .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+    cursor:pointer;
+  }
+  .btn:hover{ transform:translateY(-2px); }
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; transform:none; }
+  .btn-primary{ background:var(--blue); color:var(--blue-ink); box-shadow:var(--shadow-card); }
+  .btn-primary:hover{ background:var(--blue-deep); }
+  .btn-ghost{ border-color:var(--paper-line); color:var(--ink); }
+  .btn-ghost:hover{ border-color:var(--blue); color:var(--blue); }
+  .btn-amber{ background:var(--amber); color:var(--blue-ink); }
+  .btn-amber:hover{ background:var(--amber-deep); }
+
+  /* ---------- Section shell ---------- */
+  section{ padding:clamp(56px,9vw,96px) 0; }
+  .section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+    margin-bottom:clamp(32px,5vw,52px);
+    flex-wrap:wrap;
+  }
+  .section-head h2{ font-size:clamp(1.9rem, 4vw, 2.6rem); }
+  .section-head .label{ margin-bottom:10px; display:block; }
+  .section-note{ max-width:38ch; color:var(--ink-soft); font-size:0.95rem; }
+
+  /* ---------- Library grid ---------- */
+  .library-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    gap:22px;
+  }
+  .book-card{
+    position:relative;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:14px;
+    padding:26px 24px 24px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    overflow:hidden;
+    opacity:0;
+    transform:translateY(16px);
+    transition:opacity .5s ease, transform .5s ease, border-color .2s ease, box-shadow .2s ease;
+  }
+  .book-card.is-visible{ opacity:1; transform:translateY(0); }
+  .book-card::before{
+    content:"";
+    position:absolute;
+    top:0; left:0; right:0;
+    height:4px;
+    background:var(--blue);
+  }
+  .book-card:hover{ border-color:var(--blue); box-shadow:var(--shadow-card); }
+
+  .sample-chip{
+    position:absolute;
+    top:18px;
+    right:18px;
+    z-index:1;
+    font-family:var(--font-mono);
+    font-size:0.62rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--amber);
+    background:var(--paper-card);
+    border:1px solid var(--amber);
+    border-radius:999px;
+    padding:3px 9px;
+  }
+  .book-index{
+    font-family:var(--font-display);
+    font-style:italic;
+    font-weight:600;
+    font-size:2.1rem;
+    color:var(--blue);
+    line-height:1;
+    margin-top:4px;
+  }
+  .book-cover-img{
+    width:calc(100% + 48px);
+    max-width:calc(100% + 48px);
+    margin:-26px -24px 4px;
+    aspect-ratio:2/3;
+    object-fit:cover;
+  }
+  .book-title{ font-size:1.32rem; line-height:1.16; }
+  .book-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--ink-faint);
+    letter-spacing:0.04em;
+  }
+  .book-blurb{ color:var(--ink-soft); font-size:0.94rem; }
+  .book-link{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    letter-spacing:0.04em;
+    text-decoration:none;
+    color:var(--blue);
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:6px;
+  }
+  .book-link:hover{ color:var(--amber); }
+  .book-link .arrow{ transition:transform .15s ease; }
+  .book-link:hover .arrow{ transform:translateX(3px); }
+
+  /* ---------- ARC / reader team ---------- */
+  .arc-panel{
+    display:grid;
+    grid-template-columns:1.15fr 1fr;
+    gap:clamp(32px,6vw,64px);
+    align-items:start;
+  }
+  @media (max-width:760px){ .arc-panel{ grid-template-columns:1fr; } }
+  .arc-copy h2{ font-size:clamp(1.8rem,3.6vw,2.4rem); margin-bottom:16px; }
+  .arc-copy p{ color:var(--ink-soft); }
+  .arc-steps{
+    list-style:none;
+    margin:24px 0 0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .arc-steps li{
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+    font-size:0.95rem;
+  }
+  .arc-steps .num{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--blue);
+    border:1px solid var(--blue);
+    width:26px; height:26px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .arc-card{
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:14px;
+    padding:28px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    position:relative;
+    overflow:hidden;
+    box-shadow:var(--shadow-card);
+  }
+  .arc-card::before{
+    content:"";
+    position:absolute;
+    top:0; left:0; right:0;
+    height:4px;
+    background:var(--amber);
+  }
+  .arc-card .label{ color:var(--amber); }
+  .arc-card h3{ font-size:1.3rem; margin-top:8px; }
+  .arc-card > div > p{ color:var(--ink-soft); font-size:0.9rem; margin:10px 0 0; }
+  .arc-note{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--ink-faint);
+  }
+
+  .arc-form{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .field label{
+    font-family:var(--font-mono);
+    font-size:0.7rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .field input,
+  .field select,
+  .field textarea{
+    font-family:var(--font-body);
+    font-size:0.95rem;
+    color:var(--ink);
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    border-radius:8px;
+    padding:10px 12px;
+    outline:none;
+    transition:border-color .15s ease;
+  }
+  .field input::placeholder,
+  .field textarea::placeholder{ color:var(--ink-faint); }
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus{ border-color:var(--blue); }
+  .field textarea{ resize:vertical; min-height:52px; }
+  .field select{ cursor:pointer; }
+  .field input[type="file"]{
+    border:1px dashed var(--paper-line);
+    background:transparent;
+    padding:10px 12px;
+    font-size:0.86rem;
+  }
+  .arc-status{
+    font-family:var(--font-mono);
+    font-size:0.76rem;
+    color:var(--blue);
+    min-height:1em;
+  }
+
+  /* ---------- Admin panel ---------- */
+  #pannello-autore{ border-top:1px dashed var(--paper-line); }
+  .admin-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:clamp(28px,5vw,48px);
+    align-items:start;
+  }
+  @media (max-width:760px){ .admin-grid{ grid-template-columns:1fr; } }
+  .admin-form{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:14px;
+    padding:24px;
+  }
+  .admin-form-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  .admin-cover-preview{ margin-top:10px; }
+  .admin-cover-preview img{
+    width:96px;
+    aspect-ratio:2/3;
+    object-fit:cover;
+    border-radius:8px;
+    border:1px solid var(--paper-line);
+  }
+  .admin-gate-form{
+    display:flex;
+    align-items:flex-end;
+    gap:14px;
+    flex-wrap:wrap;
+    max-width:360px;
+  }
+  .admin-gate-form .field{ flex:1; min-width:180px; }
+  .admin-export{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:20px;
+    flex-wrap:wrap;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:10px;
+    padding:16px 20px;
+    margin-bottom:24px;
+  }
+  .admin-export p{ margin:0; color:var(--ink-soft); font-size:0.88rem; max-width:44ch; }
+  .admin-list-wrap{ display:flex; flex-direction:column; gap:14px; }
+  .admin-list{ display:flex; flex-direction:column; gap:10px; }
+  .admin-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:10px;
+    padding:10px 14px;
+  }
+  .admin-thumb{
+    width:40px;
+    aspect-ratio:2/3;
+    object-fit:cover;
+    border-radius:5px;
+    flex-shrink:0;
+  }
+  .admin-thumb-placeholder{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--blue);
+    color:var(--blue-ink);
+    font-family:var(--font-mono);
+    font-size:0.6rem;
+    text-align:center;
+  }
+  .admin-row-info{ flex:1; min-width:0; }
+  .admin-row-title{ font-size:0.95rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .admin-row-meta{ font-family:var(--font-mono); font-size:0.72rem; color:var(--ink-faint); margin-top:2px; }
+  .admin-remove-btn{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    background:none;
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:6px 10px;
+    cursor:pointer;
+    transition:color .15s ease, border-color .15s ease;
+    flex-shrink:0;
+  }
+  .admin-remove-btn:hover{ color:var(--danger); border-color:var(--danger); }
+  .admin-remove-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .admin-toggle{
+    font-family:var(--font-mono);
+    font-size:0.76rem;
+    letter-spacing:0.05em;
+    color:var(--ink-soft);
+    background:none;
+    border:none;
+    padding:0;
+    cursor:pointer;
+  }
+  .admin-toggle:hover{ color:var(--blue); }
+
+  /* ---------- Footer ---------- */
+  footer{
+    padding:48px clamp(20px,5vw,56px) 48px;
+    display:flex;
+    flex-direction:column;
+    gap:28px;
+    border-top:1px solid var(--paper-line);
+  }
+  .footer-newsletter{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+    flex-wrap:wrap;
+  }
+  .footer-newsletter-copy{ max-width:40ch; }
+  .footer-newsletter-copy p{ color:var(--ink-soft); font-size:0.92rem; margin:8px 0 0; }
+  .newsletter-form{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .newsletter-form input{
+    font-family:var(--font-body);
+    font-size:0.95rem;
+    color:var(--ink);
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:8px;
+    padding:11px 14px;
+    outline:none;
+    min-width:220px;
+    transition:border-color .15s ease;
+  }
+  .newsletter-form input::placeholder{ color:var(--ink-faint); }
+  .newsletter-form input:focus{ border-color:var(--blue); }
+  .footer-bottom{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:14px;
+    padding-top:24px;
+    border-top:1px solid var(--paper-line);
+  }
+  footer .label{ margin:0; color:var(--ink-faint); }
+  .social-links{ display:flex; align-items:center; gap:18px; }
+  .social-links a{
+    font-family:var(--font-mono);
+    font-size:0.76rem;
+    letter-spacing:0.05em;
+    text-decoration:none;
+    color:var(--ink-soft);
+  }
+  .social-links a:hover{ color:var(--blue); }
+
+  @media (prefers-reduced-motion: reduce){
+    .book-card{ transition:none; opacity:1; transform:none; }
+    .btn:hover{ transform:none; }
+    .hero-blob{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="brandmark">MICHEAL A. <span>COLLINS</span></div>
+  <nav class="site">
+    <a href="#libreria">Library</a>
+    <a href="#team-lettori">Reader Team</a>
+    <a href="#contatti">Contact</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-blob" aria-hidden="true"></div>
+    <div class="wrap hero-inner">
+      <div class="hero-eyebrow">
+        <span class="label">Author &middot; Nonfiction</span>
+      </div>
+      <h1>Micheal A. <em>Collins</em></h1>
+      <p class="hero-tagline">Clear ideas for readers who want results, not just theory.</p>
+      <p class="hero-bio">
+        Here you'll find every book I've published, in one catalog that keeps
+        growing, plus the program for readers who want an early copy and a
+        spot on the review team.
+        <em>&mdash; replace this text with your own short bio.</em>
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#libreria">Browse the library</a>
+        <a class="btn btn-ghost" href="#team-lettori">Join the reader team</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="libreria">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <span class="label">Catalog</span>
+          <h2>The Library</h2>
+        </div>
+        <p class="section-note">Every new book gets its own card here as soon as it's published.</p>
+      </div>
+      <div class="library-grid" id="library-grid"></div>
+    </div>
+  </section>
+
+  <section id="team-lettori">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <span class="label">Early Access &amp; Reviews</span>
+          <h2>Join the Reader Team</h2>
+        </div>
+      </div>
+      <div class="arc-panel">
+        <div class="arc-copy">
+          <p>
+            I'm looking for a small group of dedicated readers to send free,
+            early PDF copies of my books to &mdash; in exchange for an honest
+            review once you've finished reading.
+          </p>
+          <ol class="arc-steps">
+            <li><span class="num">1</span> Fill out the form here with your name and email.</li>
+            <li><span class="num">2</span> Get the free PDF of the selected book by email.</li>
+            <li><span class="num">3</span> Take your time reading it, then leave an honest review.</li>
+          </ol>
+        </div>
+        <div class="arc-card">
+          <div>
+            <span class="label">Free book</span>
+            <h3>Early PDF copy</h3>
+            <p>No cost, no commitment beyond an honest review once you're done reading.</p>
+          </div>
+          <form class="arc-form" id="arc-form" novalidate>
+            <div class="field">
+              <label for="arc-name">Full name</label>
+              <input type="text" id="arc-name" name="name" placeholder="Your name" required autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="arc-email">Email</label>
+              <input type="email" id="arc-email" name="email" placeholder="you@example.com" required autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="arc-book">Book you're interested in</label>
+              <select id="arc-book" name="book"></select>
+            </div>
+            <div class="field">
+              <label for="arc-message">Message (optional)</label>
+              <textarea id="arc-message" name="message" rows="2" placeholder="Add anything else here"></textarea>
+            </div>
+            <button type="submit" class="btn btn-amber">Request your free book</button>
+            <span class="arc-status" id="arc-status" aria-live="polite"></span>
+          </form>
+          <span class="arc-note">This opens your email app with the details already filled in &mdash; just hit send.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pannello-autore" hidden>
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <span class="label">For you only</span>
+          <h2>Author Panel</h2>
+        </div>
+        <p class="section-note" id="admin-note">Enter the password to access the panel.</p>
+      </div>
+
+      <form class="admin-gate-form" id="admin-gate-form" novalidate>
+        <div class="field">
+          <label for="admin-password">Password</label>
+          <input type="password" id="admin-password" name="password" placeholder="Password" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary">Enter</button>
+        <span class="arc-status" id="admin-gate-status" aria-live="polite"></span>
+      </form>
+
+      <div id="admin-content" hidden>
+        <div class="admin-export">
+          <p>Changes you make here go live for every visitor right away &mdash; no download or re-upload needed.</p>
+          <button type="button" class="btn btn-ghost" id="admin-logout-btn">Log out</button>
+        </div>
+        <div class="admin-grid">
+          <form class="admin-form" id="admin-add-form" novalidate>
+            <div class="field">
+              <label for="admin-title">Book title</label>
+              <input type="text" id="admin-title" name="title" placeholder="Title" required>
+            </div>
+            <div class="admin-form-row">
+              <div class="field">
+                <label for="admin-year">Year</label>
+                <input type="text" id="admin-year" name="year" placeholder="2026" inputmode="numeric">
+              </div>
+              <div class="field">
+                <label for="admin-index">Classification (optional)</label>
+                <input type="text" id="admin-index" name="index" placeholder="e.g. 338.04">
+              </div>
+            </div>
+            <div class="field">
+              <label for="admin-blurb">Short synopsis</label>
+              <textarea id="admin-blurb" name="blurb" rows="2" placeholder="A sentence or two about the book"></textarea>
+            </div>
+            <div class="field">
+              <label for="admin-link">Link (Amazon, KDP, etc.)</label>
+              <input type="url" id="admin-link" name="link" placeholder="https://...">
+            </div>
+            <div class="field">
+              <label for="admin-cover">Cover</label>
+              <input type="file" id="admin-cover" name="cover" accept="image/*">
+              <div class="admin-cover-preview" id="admin-cover-preview" hidden>
+                <img id="admin-cover-preview-img" alt="Cover preview">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add to library</button>
+            <span class="arc-status" id="admin-status" aria-live="polite"></span>
+          </form>
+          <div class="admin-list-wrap">
+            <span class="label">Books in the catalog</span>
+            <div class="admin-list" id="admin-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="contatti">
+  <div class="footer-newsletter">
+    <div class="footer-newsletter-copy">
+      <span class="label">Newsletter</span>
+      <p>Get an email whenever a new book comes out or a new early-access round opens for the reader team.</p>
+    </div>
+    <div>
+      <form class="newsletter-form" id="newsletter-form" novalidate>
+        <input type="email" id="newsletter-email" name="email" placeholder="Your email" required autocomplete="email">
+        <button type="submit" class="btn btn-ghost">Subscribe</button>
+      </form>
+      <span class="arc-status" id="newsletter-status" aria-live="polite"></span>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p class="label">&copy; <span id="year"></span> Micheal A. Collins</p>
+    <div class="social-links">
+      <a href="#">Amazon Author Page</a>
+      <a href="#">Instagram</a>
+      <button type="button" class="admin-toggle" id="admin-toggle">Author Panel</button>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Same folder as this page, on your hosting. */
+  var API = 'api.php';
+
+  function escapeHtml(str){
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /* =====================================================================
+     STATE: the book catalog
+     Unlike the standalone/preview version of this site, here the catalog
+     lives in the MySQL database on your hosting: every visitor's browser
+     fetches the current list from api.php, and every change the author
+     panel makes is saved straight to that database — no download/re-upload
+     step, no separate "versions" of the site to keep in sync.
+     ===================================================================== */
+  var books = [];
+
+  function renderBookCard(book){
+    var card = document.createElement('article');
+    card.className = 'book-card';
+
+    var chipHtml = book.sample ? '<span class="sample-chip">Sample</span>' : '';
+    var visualHtml = book.cover
+      ? '<img class="book-cover-img" src="' + escapeHtml(book.cover) + '" alt="Cover of ' + escapeHtml(book.title) + '">'
+      : '<div class="book-index">' + escapeHtml(book.index || '') + '</div>';
+
+    card.innerHTML =
+      chipHtml +
+      visualHtml +
+      '<h3 class="book-title">' + escapeHtml(book.title) + '</h3>' +
+      '<div class="book-meta">' + escapeHtml(book.year || '') + '</div>' +
+      '<p class="book-blurb">' + escapeHtml(book.blurb || '') + '</p>' +
+      '<a class="book-link" href="' + escapeHtml(book.link || '#') + '">Learn more <span class="arrow">&rarr;</span></a>';
+
+    return card;
+  }
+
+  function applyRevealObserver(){
+    if (!reduceMotion && 'IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      document.querySelectorAll('.book-card:not(.is-visible)').forEach(function(card){ io.observe(card); });
+    } else {
+      document.querySelectorAll('.book-card').forEach(function(card){ card.classList.add('is-visible'); });
+    }
+  }
+
+  function renderGrid(){
+    var grid = document.getElementById('library-grid');
+    grid.innerHTML = '';
+    books.forEach(function(book){ grid.appendChild(renderBookCard(book)); });
+    applyRevealObserver();
+  }
+
+  function populateBookSelect(){
+    var select = document.getElementById('arc-book');
+    var previous = select.value;
+    select.innerHTML = '';
+    var anyOption = document.createElement('option');
+    anyOption.value = "Not sure / surprise me";
+    anyOption.textContent = "Not sure / surprise me";
+    select.appendChild(anyOption);
+    books.forEach(function(book){
+      var opt = document.createElement('option');
+      opt.value = book.title;
+      opt.textContent = book.title;
+      select.appendChild(opt);
+    });
+    if (previous) { select.value = previous; }
+  }
+
+  function renderAdminRow(book){
+    var row = document.createElement('div');
+    row.className = 'admin-row';
+    var thumbHtml = book.cover
+      ? '<img class="admin-thumb" src="' + escapeHtml(book.cover) + '" alt="">'
+      : '<div class="admin-thumb admin-thumb-placeholder">' + escapeHtml((book.index || '').slice(0, 6)) + '</div>';
+    row.innerHTML =
+      thumbHtml +
+      '<div class="admin-row-info">' +
+        '<div class="admin-row-title">' + escapeHtml(book.title) + '</div>' +
+        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + '</div>' +
+      '</div>' +
+      '<button type="button" class="admin-remove-btn" data-id="' + escapeHtml(book.id) + '">Remove</button>';
+    return row;
+  }
+
+  function renderAdminList(){
+    var list = document.getElementById('admin-list');
+    list.innerHTML = '';
+    if (!books.length) {
+      var empty = document.createElement('p');
+      empty.className = 'section-note';
+      empty.textContent = 'No books in the catalog yet. Add one using the form.';
+      list.appendChild(empty);
+      return;
+    }
+    books.forEach(function(book){ list.appendChild(renderAdminRow(book)); });
+  }
+
+  function refreshAll(){
+    renderGrid();
+    populateBookSelect();
+    renderAdminList();
+  }
+
+  function loadBooks(){
+    return fetch(API + '?action=list', { credentials: 'same-origin' })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        books = (data && data.books) || [];
+        refreshAll();
+      })
+      .catch(function(){
+        var grid = document.getElementById('library-grid');
+        grid.innerHTML = '<p class="section-note">The catalog couldn\'t be loaded right now. Please refresh the page in a moment.</p>';
+      });
+  }
+
+  loadBooks();
+
+  /* =====================================================================
+     FREE BOOK REQUEST / READER TEAM
+     ===================================================================== */
+  var arcForm = document.getElementById('arc-form');
+  var arcStatus = document.getElementById('arc-status');
+
+  arcForm.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    if (!arcForm.reportValidity()) { return; }
+
+    var name = document.getElementById('arc-name').value.trim();
+    var email = document.getElementById('arc-email').value.trim();
+    var book = document.getElementById('arc-book').value;
+    var message = document.getElementById('arc-message').value.trim();
+
+    var subject = "I'd like to join the reader team — " + name;
+    var bodyLines = [
+      "Full name: " + name,
+      "Email: " + email,
+      "Book I'm interested in: " + book,
+      "",
+      "Message: " + (message || "-")
+    ];
+    var mailto = "mailto:micheal.a.collins.author@gmail.com" +
+      "?subject=" + encodeURIComponent(subject) +
+      "&body=" + encodeURIComponent(bodyLines.join("\n"));
+
+    window.location.href = mailto;
+    arcStatus.textContent = "Opening your email app…";
+  });
+
+  /* =====================================================================
+     NEWSLETTER SIGNUP
+     ===================================================================== */
+  var newsletterForm = document.getElementById('newsletter-form');
+  var newsletterStatus = document.getElementById('newsletter-status');
+
+  newsletterForm.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    if (!newsletterForm.reportValidity()) { return; }
+
+    var email = document.getElementById('newsletter-email').value.trim();
+    var subject = "Sign me up for the newsletter";
+    var body = "Email to subscribe to the newsletter: " + email;
+    var mailto = "mailto:micheal.a.collins.author@gmail.com" +
+      "?subject=" + encodeURIComponent(subject) +
+      "&body=" + encodeURIComponent(body);
+
+    window.location.href = mailto;
+    newsletterStatus.textContent = "Opening your email app…";
+  });
+
+  /* =====================================================================
+     AUTHOR PANEL
+     Hidden by default (opens from the "Author Panel" link in the
+     footer). The password is now checked by api.php on the server,
+     against a bcrypt hash stored in config.php — never in this file —
+     so this is real protection, not just a UI deterrent.
+     ===================================================================== */
+  var adminToggle = document.getElementById('admin-toggle');
+  var adminPanel = document.getElementById('pannello-autore');
+  var adminNote = document.getElementById('admin-note');
+  var adminGateForm = document.getElementById('admin-gate-form');
+  var adminGateStatus = document.getElementById('admin-gate-status');
+  var adminPasswordInput = document.getElementById('admin-password');
+  var adminContent = document.getElementById('admin-content');
+  var adminAddForm = document.getElementById('admin-add-form');
+  var adminStatus = document.getElementById('admin-status');
+  var adminCoverInput = document.getElementById('admin-cover');
+  var adminCoverPreview = document.getElementById('admin-cover-preview');
+  var adminCoverPreviewImg = document.getElementById('admin-cover-preview-img');
+  var adminLogoutBtn = document.getElementById('admin-logout-btn');
+
+  function showAdminUnlocked(){
+    adminGateForm.hidden = true;
+    adminContent.hidden = false;
+    adminNote.textContent = 'Add or remove books from the catalog, cover upload included.';
+  }
+
+  function showAdminLocked(){
+    adminGateForm.hidden = false;
+    adminContent.hidden = true;
+    adminNote.textContent = 'Enter the password to access the panel.';
+    adminGateForm.reset();
+  }
+
+  function checkSession(){
+    return fetch(API + '?action=session', { credentials: 'same-origin' })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (data && data.admin) { showAdminUnlocked(); }
+      })
+      .catch(function(){});
+  }
+  checkSession();
+
+  adminGateForm.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    var password = adminPasswordInput.value;
+    adminGateStatus.textContent = 'Checking…';
+
+    var body = new URLSearchParams();
+    body.set('action', 'login');
+    body.set('password', password);
+
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function(res){ return { ok: res.ok }; })
+      .then(function(r){
+        if (r.ok) {
+          adminGateStatus.textContent = '';
+          adminPasswordInput.value = '';
+          showAdminUnlocked();
+        } else {
+          adminGateStatus.textContent = 'Incorrect password.';
+          adminPasswordInput.value = '';
+          adminPasswordInput.focus();
+        }
+      })
+      .catch(function(){
+        adminGateStatus.textContent = "Couldn't reach the server. Try again in a moment.";
+      });
+  });
+
+  adminToggle.addEventListener('click', function(){
+    adminPanel.hidden = !adminPanel.hidden;
+    if (!adminPanel.hidden) {
+      adminPanel.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      if (!adminGateForm.hidden) { adminPasswordInput.focus(); }
+    }
+  });
+
+  if (adminLogoutBtn) {
+    adminLogoutBtn.addEventListener('click', function(){
+      var body = new URLSearchParams();
+      body.set('action', 'logout');
+      fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+        .catch(function(){})
+        .then(function(){ showAdminLocked(); });
+    });
+  }
+
+  adminCoverInput.addEventListener('change', function(evt){
+    var file = evt.target.files && evt.target.files[0];
+    if (!file) { adminCoverPreview.hidden = true; adminCoverPreviewImg.removeAttribute('src'); return; }
+    adminCoverPreviewImg.src = URL.createObjectURL(file);
+    adminCoverPreview.hidden = false;
+  });
+
+  adminAddForm.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    if (!adminAddForm.reportValidity()) { return; }
+
+    var title = document.getElementById('admin-title').value.trim();
+    if (!title) { return; }
+
+    var formData = new FormData();
+    formData.set('action', 'add');
+    formData.set('title', title);
+    formData.set('year', document.getElementById('admin-year').value.trim() || String(new Date().getFullYear()));
+    formData.set('index', document.getElementById('admin-index').value.trim());
+    formData.set('blurb', document.getElementById('admin-blurb').value.trim());
+    formData.set('link', document.getElementById('admin-link').value.trim());
+    var file = adminCoverInput.files && adminCoverInput.files[0];
+    if (file) { formData.set('cover', file); }
+
+    adminStatus.textContent = 'Saving…';
+
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: formData })
+      .then(function(res){
+        return res.json().catch(function(){ return {}; }).then(function(data){
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function(r){
+        if (r.ok) {
+          adminAddForm.reset();
+          adminCoverPreview.hidden = true;
+          adminCoverPreviewImg.removeAttribute('src');
+          adminStatus.textContent = 'Added. Now live for every visitor.';
+          return loadBooks();
+        }
+        if (r.status === 401) {
+          adminStatus.textContent = 'Your session expired: log in again.';
+          showAdminLocked();
+        } else if (r.data && r.data.error === 'invalid_image') {
+          adminStatus.textContent = "I couldn't read that image. Try a different cover, or skip the cover.";
+        } else {
+          adminStatus.textContent = "Couldn't save. Please try again.";
+        }
+      })
+      .catch(function(){
+        adminStatus.textContent = "Couldn't reach the server. Please try again.";
+      });
+  });
+
+  document.getElementById('admin-list').addEventListener('click', function(evt){
+    var btn = evt.target.closest('.admin-remove-btn');
+    if (!btn || btn.disabled) { return; }
+    var id = btn.getAttribute('data-id');
+    var book = books.filter(function(b){ return String(b.id) === String(id); })[0];
+    if (!book) { return; }
+    if (!window.confirm('Remove "' + book.title + '" from the catalog?')) { return; }
+
+    var body = new URLSearchParams();
+    body.set('action', 'remove');
+    body.set('id', id);
+
+    btn.disabled = true;
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function(res){ return { ok: res.ok, status: res.status }; })
+      .then(function(r){
+        if (r.ok) { return loadBooks(); }
+        if (r.status === 401) {
+          adminStatus.textContent = 'Your session expired: log in again.';
+          showAdminLocked();
+        } else {
+          adminStatus.textContent = "Couldn't remove the book. Please try again.";
+          btn.disabled = false;
+        }
+      })
+      .catch(function(){
+        adminStatus.textContent = "Couldn't reach the server. Please try again.";
+        btn.disabled = false;
+      });
+  });
+})();
+</script>
+</body>
+</html>

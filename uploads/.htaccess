@@ -1,0 +1,15 @@
+# Le copertine caricate sono solo immagini: qui dentro nessun file
+# deve mai essere eseguito come script, per sicurezza.
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+<FilesMatch "\.(php|phtml|php\d|cgi|pl)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+Options -Indexes

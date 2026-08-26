@@ -1,0 +1,7 @@
+{
+    "name": "micheal-a-collins/author-site",
+    "description": "Sito autore Micheal A. Collins - catalogo libri PHP + MySQL",
+    "require": {
+        "php": ">=8.2"
+    }
+}
