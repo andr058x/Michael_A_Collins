@@ -66,6 +66,22 @@ function ensureSchema(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
+    // Richieste del "Reader Team": arrivano dal modulo pubblico in home page
+    // e restano qui finché l'autore non le processa (e le rimuove) dal
+    // pannello autore. Non serve più aprire un'app di posta: il modulo
+    // scrive direttamente in questa tabella.
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS reader_requests (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            book VARCHAR(255) DEFAULT \'\',
+            message TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
     static $checkedSeed = false;
     if ($checkedSeed) {
         return;
@@ -183,6 +199,17 @@ function deleteCoverFile(?string $name): void {
     }
 }
 
+function rowToRequest(array $r): array {
+    return [
+        'id' => (int) $r['id'],
+        'name' => $r['name'],
+        'email' => $r['email'],
+        'book' => $r['book'],
+        'message' => $r['message'],
+        'createdAt' => $r['created_at'],
+    ];
+}
+
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 try {
@@ -274,6 +301,62 @@ try {
                 $del = db()->prepare('DELETE FROM books WHERE id = :id');
                 $del->execute([':id' => $id]);
             }
+
+            out(['ok' => true]);
+            break;
+
+        case 'submit_request':
+            // Modulo pubblico "Join the Reader Team": chiunque può inviarlo,
+            // niente login richiesto. Il campo "website" è un honeypot
+            // invisibile ai visitatori umani (nascosto via CSS) ma spesso
+            // compilato dai bot automatici: se arriva valorizzato, fingiamo
+            // successo senza scrivere nulla, per non incoraggiare il bot a
+            // ritentare con varianti.
+            $honeypot = trim((string) ($_POST['website'] ?? ''));
+            if ($honeypot !== '') {
+                out(['ok' => true]);
+            }
+
+            $name = trim((string) ($_POST['name'] ?? ''));
+            $email = trim((string) ($_POST['email'] ?? ''));
+            $book = trim((string) ($_POST['book'] ?? ''));
+            $message = trim((string) ($_POST['message'] ?? ''));
+
+            if ($name === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                out(['error' => 'invalid_request'], 400);
+            }
+
+            $stmt = db()->prepare(
+                'INSERT INTO reader_requests (name, email, book, message)
+                 VALUES (:name, :email, :book, :message)'
+            );
+            $stmt->execute([
+                ':name' => $name,
+                ':email' => $email,
+                ':book' => $book,
+                ':message' => $message,
+            ]);
+
+            out(['ok' => true]);
+            break;
+
+        case 'list_requests':
+            requireAdmin();
+
+            $rows = db()->query('SELECT * FROM reader_requests ORDER BY created_at DESC, id DESC')->fetchAll();
+            out(['requests' => array_map('rowToRequest', $rows)]);
+            break;
+
+        case 'remove_request':
+            requireAdmin();
+
+            $id = (int) ($_POST['id'] ?? 0);
+            if (!$id) {
+                out(['error' => 'missing_id'], 400);
+            }
+
+            $del = db()->prepare('DELETE FROM reader_requests WHERE id = :id');
+            $del->execute([':id' => $id]);
 
             out(['ok' => true]);
             break;

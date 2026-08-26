@@ -411,6 +411,18 @@
     color:var(--blue);
     min-height:1em;
   }
+  /* Honeypot: fuori dallo schermo per i visitatori umani (e per chi legge
+     con uno screen reader), ma raggiungibile dai bot che compilano ogni
+     campo di un form senza guardarlo. Se questo campo arriva valorizzato,
+     api.php scarta la richiesta silenziosamente. */
+  .hp-field{
+    position:absolute;
+    left:-9999px;
+    top:auto;
+    width:1px;
+    height:1px;
+    overflow:hidden;
+  }
 
   /* ---------- Admin panel ---------- */
   #pannello-autore{ border-top:1px dashed var(--paper-line); }
@@ -522,6 +534,57 @@
     cursor:pointer;
   }
   .admin-toggle:hover{ color:var(--blue); }
+
+  .admin-requests-section{
+    margin-top:clamp(32px,5vw,48px);
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .admin-requests-section .admin-list{ margin-top:10px; }
+  .request-row{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:10px;
+    padding:14px 16px;
+  }
+  .request-row-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .request-name{ font-size:0.95rem; font-weight:600; }
+  .request-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--ink-faint);
+    margin-top:2px;
+  }
+  .request-book{
+    font-family:var(--font-mono);
+    font-size:0.74rem;
+    color:var(--blue);
+  }
+  .request-message{ color:var(--ink-soft); font-size:0.88rem; }
+  .request-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .request-reply-link{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    text-decoration:none;
+    color:var(--blue);
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:6px 10px;
+    transition:border-color .15s ease;
+  }
+  .request-reply-link:hover{ border-color:var(--blue); }
 
   /* ---------- Footer ---------- */
   footer{
@@ -646,10 +709,14 @@
               <label for="arc-message">Message (optional)</label>
               <textarea id="arc-message" name="message" rows="2" placeholder="Add anything else here"></textarea>
             </div>
+            <div class="hp-field" aria-hidden="true">
+              <label for="arc-website">Website</label>
+              <input type="text" id="arc-website" name="website" tabindex="-1" autocomplete="off">
+            </div>
             <button type="submit" class="btn btn-amber">Request your free book</button>
             <span class="arc-status" id="arc-status" aria-live="polite"></span>
           </form>
-          <span class="arc-note">This opens your email app with the details already filled in &mdash; just hit send.</span>
+          <span class="arc-note">Your request goes straight to me &mdash; no email app needed.</span>
         </div>
       </div>
     </div>
@@ -717,6 +784,12 @@
             <span class="label">Books in the catalog</span>
             <div class="admin-list" id="admin-list"></div>
           </div>
+        </div>
+
+        <div class="admin-requests-section">
+          <span class="label">Reader Team requests</span>
+          <p class="section-note" id="admin-requests-note">People who filled out the "Join the Reader Team" form below.</p>
+          <div class="admin-list" id="admin-requests-list"></div>
         </div>
       </div>
     </div>
@@ -900,21 +973,35 @@
     var email = document.getElementById('arc-email').value.trim();
     var book = document.getElementById('arc-book').value;
     var message = document.getElementById('arc-message').value.trim();
+    var website = document.getElementById('arc-website').value; /* honeypot */
 
-    var subject = "I'd like to join the reader team — " + name;
-    var bodyLines = [
-      "Full name: " + name,
-      "Email: " + email,
-      "Book I'm interested in: " + book,
-      "",
-      "Message: " + (message || "-")
-    ];
-    var mailto = "mailto:micheal.a.collins.author@gmail.com" +
-      "?subject=" + encodeURIComponent(subject) +
-      "&body=" + encodeURIComponent(bodyLines.join("\n"));
+    var body = new URLSearchParams();
+    body.set('action', 'submit_request');
+    body.set('name', name);
+    body.set('email', email);
+    body.set('book', book);
+    body.set('message', message);
+    body.set('website', website);
 
-    window.location.href = mailto;
-    arcStatus.textContent = "Opening your email app…";
+    var submitBtn = arcForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    arcStatus.textContent = 'Sending…';
+
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function(res){ return { ok: res.ok }; })
+      .then(function(r){
+        submitBtn.disabled = false;
+        if (r.ok) {
+          arcForm.reset();
+          arcStatus.textContent = "Thanks! I've got your request — the free PDF will be on its way by email.";
+        } else {
+          arcStatus.textContent = "Couldn't send that. Please check your details and try again.";
+        }
+      })
+      .catch(function(){
+        submitBtn.disabled = false;
+        arcStatus.textContent = "Couldn't reach the server. Please try again in a moment.";
+      });
   });
 
   /* =====================================================================
@@ -937,11 +1024,14 @@
   var adminCoverPreview = document.getElementById('admin-cover-preview');
   var adminCoverPreviewImg = document.getElementById('admin-cover-preview-img');
   var adminLogoutBtn = document.getElementById('admin-logout-btn');
+  var adminRequestsList = document.getElementById('admin-requests-list');
+  var adminRequestsNote = document.getElementById('admin-requests-note');
 
   function showAdminUnlocked(){
     adminGateForm.hidden = true;
     adminContent.hidden = false;
     adminNote.textContent = 'Add or remove books from the catalog, cover upload included.';
+    loadRequests();
   }
 
   function showAdminLocked(){
@@ -950,6 +1040,102 @@
     adminNote.textContent = 'Enter the password to access the panel.';
     adminGateForm.reset();
   }
+
+  /* =====================================================================
+     READER TEAM REQUESTS (author-only)
+     People submitting the public form on this page land here, instead of
+     opening their own email app. Reply by email from here whenever you
+     want, then remove the request once you've sent the free PDF.
+     ===================================================================== */
+  function formatRequestDate(iso){
+    if (!iso) { return ''; }
+    var d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d.getTime())) { return ''; }
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function renderRequestRow(req){
+    var row = document.createElement('div');
+    row.className = 'request-row';
+
+    var subject = "Your free copy of " + (req.book || 'the book you requested');
+    var bodyLines = [
+      "Hi " + req.name + ",",
+      "",
+      "Thanks so much for joining the reader team! Here's your free copy — looking forward to hearing what you think.",
+      "",
+      "Best,",
+      "Micheal"
+    ];
+    var mailto = 'mailto:' + req.email +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(bodyLines.join('\n'));
+
+    var messageHtml = req.message
+      ? '<p class="request-message">' + escapeHtml(req.message) + '</p>'
+      : '';
+
+    row.innerHTML =
+      '<div class="request-row-top">' +
+        '<div>' +
+          '<div class="request-name">' + escapeHtml(req.name) + ' &middot; ' + escapeHtml(req.email) + '</div>' +
+          '<div class="request-meta">' + escapeHtml(formatRequestDate(req.createdAt)) + '</div>' +
+        '</div>' +
+        '<div class="request-book">' + escapeHtml(req.book || 'Not sure / surprise me') + '</div>' +
+      '</div>' +
+      messageHtml +
+      '<div class="request-actions">' +
+        '<a class="request-reply-link" href="' + escapeHtml(mailto) + '">Reply by email</a>' +
+        '<button type="button" class="admin-remove-btn" data-request-id="' + escapeHtml(req.id) + '">Remove</button>' +
+      '</div>';
+    return row;
+  }
+
+  function renderRequestsList(requests){
+    adminRequestsList.innerHTML = '';
+    if (!requests.length) {
+      var empty = document.createElement('p');
+      empty.className = 'section-note';
+      empty.textContent = 'No requests yet.';
+      adminRequestsList.appendChild(empty);
+      return;
+    }
+    requests.forEach(function(req){ adminRequestsList.appendChild(renderRequestRow(req)); });
+  }
+
+  function loadRequests(){
+    return fetch(API + '?action=list_requests', { credentials: 'same-origin' })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        renderRequestsList((data && data.requests) || []);
+      })
+      .catch(function(){
+        adminRequestsNote.textContent = "Couldn't load requests right now.";
+      });
+  }
+
+  adminRequestsList.addEventListener('click', function(evt){
+    var btn = evt.target.closest('.admin-remove-btn[data-request-id]');
+    if (!btn || btn.disabled) { return; }
+    var id = btn.getAttribute('data-request-id');
+
+    var body = new URLSearchParams();
+    body.set('action', 'remove_request');
+    body.set('id', id);
+
+    btn.disabled = true;
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function(res){ return { ok: res.ok, status: res.status }; })
+      .then(function(r){
+        if (r.ok) { return loadRequests(); }
+        if (r.status === 401) {
+          showAdminLocked();
+        } else {
+          btn.disabled = false;
+        }
+      })
+      .catch(function(){ btn.disabled = false; });
+  });
 
   function checkSession(){
     return fetch(API + '?action=session', { credentials: 'same-origin' })
