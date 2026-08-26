@@ -448,6 +448,13 @@
     gap:14px;
   }
   .admin-cover-preview{ margin-top:10px; }
+  .pdf-file-name{
+    display:block;
+    margin-top:6px;
+    font-family:var(--font-mono);
+    font-size:0.76rem;
+    color:var(--ink-soft);
+  }
   .admin-cover-preview img{
     width:96px;
     aspect-ratio:2/3;
@@ -710,8 +717,8 @@
               <textarea id="arc-message" name="message" rows="2" placeholder="Add anything else here"></textarea>
             </div>
             <div class="hp-field" aria-hidden="true">
-              <label for="arc-website">Website</label>
-              <input type="text" id="arc-website" name="website" tabindex="-1" autocomplete="off">
+              <label for="arc-hp">Leave this field empty</label>
+              <input type="text" id="arc-hp" name="hp_check" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             </div>
             <button type="submit" class="btn btn-amber">Request your free book</button>
             <span class="arc-status" id="arc-status" aria-live="polite"></span>
@@ -776,6 +783,11 @@
               <div class="admin-cover-preview" id="admin-cover-preview" hidden>
                 <img id="admin-cover-preview-img" alt="Cover preview">
               </div>
+            </div>
+            <div class="field">
+              <label for="admin-pdf">PDF file (optional, for the free reader copy)</label>
+              <input type="file" id="admin-pdf" name="pdf" accept="application/pdf">
+              <span class="pdf-file-name" id="admin-pdf-name"></span>
             </div>
             <button type="submit" class="btn btn-primary">Add to library</button>
             <span class="arc-status" id="admin-status" aria-live="polite"></span>
@@ -896,14 +908,13 @@
     var previous = select.value;
     select.innerHTML = '';
     var anyOption = document.createElement('option');
-    anyOption.value = "Not sure / surprise me";
-    anyOption.textContent = "Not sure / surprise me";
+    anyOption.value = '';
+    anyOption.textContent = 'Not sure / surprise me';
     select.appendChild(anyOption);
     books.forEach(function(book){
       var opt = document.createElement('option');
-      var label = bookLabel(book);
-      opt.value = label;
-      opt.textContent = label;
+      opt.value = String(book.id);
+      opt.textContent = bookLabel(book);
       select.appendChild(opt);
     });
     if (previous) { select.value = previous; }
@@ -919,7 +930,7 @@
       thumbHtml +
       '<div class="admin-row-info">' +
         '<div class="admin-row-title">' + escapeHtml(bookLabel(book)) + '</div>' +
-        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + '</div>' +
+        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + (book.hasPdf ? ' &middot; PDF ready' : ' &middot; no PDF yet') + '</div>' +
       '</div>' +
       '<button type="button" class="admin-remove-btn" data-id="' + escapeHtml(book.id) + '">Remove</button>';
     return row;
@@ -971,17 +982,20 @@
 
     var name = document.getElementById('arc-name').value.trim();
     var email = document.getElementById('arc-email').value.trim();
-    var book = document.getElementById('arc-book').value;
+    var bookSelect = document.getElementById('arc-book');
+    var bookId = bookSelect.value; /* book.id, or '' for "Not sure / surprise me" */
+    var bookLabelText = bookSelect.selectedOptions.length ? bookSelect.selectedOptions[0].textContent : '';
     var message = document.getElementById('arc-message').value.trim();
-    var website = document.getElementById('arc-website').value; /* honeypot */
+    var hpCheck = document.getElementById('arc-hp').value; /* honeypot: must stay empty */
 
     var body = new URLSearchParams();
     body.set('action', 'submit_request');
     body.set('name', name);
     body.set('email', email);
-    body.set('book', book);
+    body.set('book_id', bookId);
+    body.set('book', bookLabelText);
     body.set('message', message);
-    body.set('website', website);
+    body.set('hp_check', hpCheck);
 
     var submitBtn = arcForm.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
@@ -1023,6 +1037,8 @@
   var adminCoverInput = document.getElementById('admin-cover');
   var adminCoverPreview = document.getElementById('admin-cover-preview');
   var adminCoverPreviewImg = document.getElementById('admin-cover-preview-img');
+  var adminPdfInput = document.getElementById('admin-pdf');
+  var adminPdfName = document.getElementById('admin-pdf-name');
   var adminLogoutBtn = document.getElementById('admin-logout-btn');
   var adminRequestsList = document.getElementById('admin-requests-list');
   var adminRequestsNote = document.getElementById('admin-requests-note');
@@ -1199,12 +1215,18 @@
     adminCoverPreview.hidden = false;
   });
 
+  adminPdfInput.addEventListener('change', function(evt){
+    var file = evt.target.files && evt.target.files[0];
+    adminPdfName.textContent = file ? file.name : '';
+  });
+
   adminAddForm.addEventListener('submit', function(evt){
     evt.preventDefault();
     if (!adminAddForm.reportValidity()) { return; }
 
     var title = document.getElementById('admin-title').value.trim();
     var file = adminCoverInput.files && adminCoverInput.files[0];
+    var pdfFile = adminPdfInput.files && adminPdfInput.files[0];
     if (!title && !file) {
       adminStatus.textContent = 'Add a title, a cover image, or both.';
       return;
@@ -1218,6 +1240,7 @@
     formData.set('blurb', document.getElementById('admin-blurb').value.trim());
     formData.set('link', document.getElementById('admin-link').value.trim());
     if (file) { formData.set('cover', file); }
+    if (pdfFile) { formData.set('pdf', pdfFile); }
 
     adminStatus.textContent = 'Saving…';
 
@@ -1232,6 +1255,7 @@
           adminAddForm.reset();
           adminCoverPreview.hidden = true;
           adminCoverPreviewImg.removeAttribute('src');
+          adminPdfName.textContent = '';
           adminStatus.textContent = 'Added. Now live for every visitor.';
           return loadBooks();
         }
@@ -1240,6 +1264,8 @@
           showAdminLocked();
         } else if (r.data && r.data.error === 'invalid_image') {
           adminStatus.textContent = "I couldn't read that image. Try a different cover, or skip the cover.";
+        } else if (r.data && r.data.error === 'invalid_pdf') {
+          adminStatus.textContent = "That file doesn't look like a valid PDF (or it's over 60MB). Try again, or skip the PDF for now.";
         } else if (r.data && r.data.error === 'missing_title_or_cover') {
           adminStatus.textContent = 'Add a title, a cover image, or both.';
         } else {

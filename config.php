@@ -33,3 +33,27 @@ define('ADMIN_PASSWORD_HASH', getenv('ADMIN_PASSWORD_HASH') ?: '$2y$12$i2pcKOjSc
 // codice da scrivere).
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
 define('UPLOAD_URL', 'uploads/');
+
+// --- Copie PDF dei libri (per il Reader Team) ---
+// Stessa cartella delle copertine, così restano entrambe dentro il Volume
+// persistente e sopravvivono ai deploy. UPLOAD_URL non basta da sola
+// perché i PDF non devono essere linkabili dal catalogo pubblico: il link
+// di download arriva solo via email a chi lo richiede (vedi api.php).
+define('PDF_UPLOAD_DIR', UPLOAD_DIR . 'pdfs/');
+define('PDF_UPLOAD_URL', UPLOAD_URL . 'pdfs/');
+
+// --- Email ---
+// L'indirizzo che riceve una notifica ogni volta che qualcuno si iscrive
+// al Reader Team. Cambialo impostando la variabile d'ambiente
+// ADMIN_NOTIFY_EMAIL su Railway, se un giorno serve un indirizzo diverso.
+define('ADMIN_NOTIFY_EMAIL', getenv('ADMIN_NOTIFY_EMAIL') ?: 'andrea.mirenna@gmail.com');
+// Mittente con cui partono le email (deve essere un mittente verificato
+// sul tuo account Brevo). Se non imposti EMAIL_FROM_ADDRESS, si usa lo
+// stesso indirizzo che riceve le notifiche.
+define('EMAIL_FROM_ADDRESS', getenv('EMAIL_FROM_ADDRESS') ?: ADMIN_NOTIFY_EMAIL);
+define('EMAIL_FROM_NAME', getenv('EMAIL_FROM_NAME') ?: 'Micheal A. Collins');
+// La chiave API di Brevo: la imposti come variabile d'ambiente
+// BREVO_API_KEY su Railway (mai nel codice). Finché non è impostata, le
+// richieste del Reader Team continuano a salvarsi regolarmente nel
+// pannello autore — semplicemente non parte nessuna email.
+define('BREVO_API_KEY', getenv('BREVO_API_KEY') ?: '');
