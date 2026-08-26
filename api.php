@@ -33,6 +33,10 @@ function db(): PDO {
             [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                // Serve con MySQL 8/9 recenti (autenticazione caching_sha2_password
+                // di default): senza questa opzione, PDO può rifiutare la
+                // connessione anche con credenziali corrette.
+                PDO::MYSQL_ATTR_GET_SERVER_PUBLIC_KEY => true,
             ]
         );
         ensureSchema($pdo);
@@ -277,5 +281,6 @@ try {
             out(['error' => 'unknown_action'], 404);
     }
 } catch (Throwable $e) {
+    error_log('api.php error: ' . $e->getMessage());
     out(['error' => 'server_error'], 500);
 }
