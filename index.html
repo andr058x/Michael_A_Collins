@@ -119,18 +119,15 @@
     transition:color .15s ease;
   }
   nav.site a:hover{ color:var(--blue); }
-  .header-right{
-    display:flex;
-    align-items:center;
-    gap:clamp(14px,2vw,28px);
-  }
-  .author-avatar{
-    width:44px;
-    height:44px;
+  .author-portrait{
+    display:block;
+    width:clamp(140px, 18vw, 208px);
+    height:clamp(140px, 18vw, 208px);
+    margin:0 auto 28px;
     border-radius:50%;
     object-fit:cover;
-    border:2px solid var(--paper-line);
-    flex-shrink:0;
+    border:4px solid var(--paper);
+    box-shadow:var(--shadow-card);
   }
 
   /* ---------- Hero ---------- */
@@ -154,10 +151,11 @@
     from{ transform:translate(0,0) scale(1); }
     to{ transform:translate(-2%, 3%) scale(1.05); }
   }
-  .hero-inner{ position:relative; }
+  .hero-inner{ position:relative; text-align:center; display:flex; flex-direction:column; align-items:center; }
   .hero-eyebrow{
     display:flex;
     align-items:center;
+    justify-content:center;
     gap:10px;
     margin-bottom:20px;
   }
@@ -177,11 +175,12 @@
     font-weight:500;
     font-size:clamp(1.1rem, 2.1vw, 1.4rem);
     color:var(--ink-soft);
-    margin:20px 0 24px;
+    margin:20px auto 24px;
     max-width:36ch;
   }
   .hero-bio{
     max-width:58ch;
+    margin:0 auto;
     color:var(--ink-soft);
     font-size:1.03rem;
   }
@@ -190,6 +189,7 @@
     margin-top:32px;
     display:flex;
     flex-wrap:wrap;
+    justify-content:center;
     gap:14px;
   }
 
@@ -645,20 +645,18 @@
 
 <header class="site">
   <div class="brandmark">MICHEAL A. <span>COLLINS</span></div>
-  <div class="header-right">
-    <nav class="site">
-      <a href="#libreria">Library</a>
-      <a href="#team-lettori">Reader Team</a>
-      <a href="#contatti">Contact</a>
-    </nav>
-    <img src="author.jpg" alt="Micheal A. Collins" class="author-avatar">
-  </div>
+  <nav class="site">
+    <a href="#libreria">Library</a>
+    <a href="#team-lettori">Reader Team</a>
+    <a href="#contatti">Contact</a>
+  </nav>
 </header>
 
 <main>
   <section class="hero">
     <div class="hero-blob" aria-hidden="true"></div>
     <div class="wrap hero-inner">
+      <img src="author.jpg" alt="Micheal A. Collins" class="author-portrait">
       <div class="hero-eyebrow">
         <span class="label">Author &middot; Nonfiction</span>
       </div>
