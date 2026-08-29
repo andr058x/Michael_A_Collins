@@ -98,6 +98,8 @@
     display:flex;
     align-items:center;
     justify-content:space-between;
+    flex-wrap:wrap;
+    row-gap:14px;
   }
   .brandmark{
     font-family:var(--font-display);
@@ -117,6 +119,19 @@
     transition:color .15s ease;
   }
   nav.site a:hover{ color:var(--blue); }
+  .header-right{
+    display:flex;
+    align-items:center;
+    gap:clamp(14px,2vw,28px);
+  }
+  .author-avatar{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    object-fit:cover;
+    border:2px solid var(--paper-line);
+    flex-shrink:0;
+  }
 
   /* ---------- Hero ---------- */
   .hero{
@@ -630,11 +645,14 @@
 
 <header class="site">
   <div class="brandmark">MICHEAL A. <span>COLLINS</span></div>
-  <nav class="site">
-    <a href="#libreria">Library</a>
-    <a href="#team-lettori">Reader Team</a>
-    <a href="#contatti">Contact</a>
-  </nav>
+  <div class="header-right">
+    <nav class="site">
+      <a href="#libreria">Library</a>
+      <a href="#team-lettori">Reader Team</a>
+      <a href="#contatti">Contact</a>
+    </nav>
+    <img src="author.jpg" alt="Micheal A. Collins" class="author-avatar">
+  </div>
 </header>
 
 <main>
