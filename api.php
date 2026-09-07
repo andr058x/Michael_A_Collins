@@ -102,6 +102,37 @@ function ensureSchema(PDO $pdo): void {
     if (!columnExists($pdo, 'reader_requests', 'book_id')) {
         $pdo->exec('ALTER TABLE reader_requests ADD COLUMN book_id INT UNSIGNED DEFAULT NULL');
     }
+    // 'paid' (link esterno, es. Amazon) oppure 'free' (PDF scaricabile
+    // direttamente dalla scheda del libro, senza passare dal modulo
+    // "Join the Reader Team"). Di default i libri già esistenti restano
+    // 'paid', così non cambia nulla per loro finché non li modifichi.
+    if (!columnExists($pdo, 'books', 'book_type')) {
+        $pdo->exec("ALTER TABLE books ADD COLUMN book_type VARCHAR(10) NOT NULL DEFAULT 'paid'");
+    }
+
+    // Un download gratuito per indirizzo email (su tutti i libri "Free"
+    // messi in promozione), tracciato qui. L'autore può sbloccarne un
+    // secondo (o più) da pannello dopo aver ricevuto una recensione: quel
+    // permesso extra vive nella tabella dei "grant" qui sotto.
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS free_downloads (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            email VARCHAR(255) NOT NULL,
+            book_id INT UNSIGNED DEFAULT NULL,
+            book_title VARCHAR(255) DEFAULT \'\',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY email_idx (email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS free_download_grants (
+            email VARCHAR(255) NOT NULL,
+            extra_allowed INT UNSIGNED NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -145,6 +176,8 @@ function requireAdmin(): void {
 }
 
 function rowToBook(array $r): array {
+    $type = in_array($r['book_type'] ?? 'paid', ['free', 'paid'], true) ? $r['book_type'] : 'paid';
+    $hasPdf = $r['pdf'] !== null && $r['pdf'] !== '';
     return [
         'id' => (int) $r['id'],
         'index' => $r['code'],
@@ -154,11 +187,12 @@ function rowToBook(array $r): array {
         'link' => $r['link'] ?: '#',
         'cover' => $r['cover'] ? UPLOAD_URL . $r['cover'] : null,
         'sample' => (bool) $r['is_sample'],
-        // Il file PDF vero e proprio non è mai esposto qui: chi lo vuole
-        // passa dal modulo "Join the Reader Team", che manda il link via
-        // email. Questo flag serve solo al pannello autore, per mostrare
-        // a colpo d'occhio quali libri hanno già una copia pronta.
-        'hasPdf' => $r['pdf'] !== null && $r['pdf'] !== '',
+        'type' => $type,
+        // Il link diretto al PDF non è mai incluso qui, nemmeno per i libri
+        // gratuiti: altrimenti chiunque potrebbe scaricarlo aggirando il
+        // limite di un download gratuito a persona. Il link vero arriva
+        // solo dall'azione "request_free_download", dopo il controllo email.
+        'hasPdf' => $hasPdf,
     ];
 }
 
@@ -371,6 +405,25 @@ function rowToRequest(array $r): array {
     ];
 }
 
+/** Email in minuscolo e senza spazi, così "Mario@Gmail.com" e
+ *  "mario@gmail.com " contano come la stessa persona ai fini del limite. */
+function normalizeEmail(string $email): string {
+    return strtolower(trim($email));
+}
+
+function freeDownloadsUsed(PDO $pdo, string $email): int {
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM free_downloads WHERE email = :email');
+    $stmt->execute([':email' => $email]);
+    return (int) $stmt->fetchColumn();
+}
+
+function freeDownloadExtraAllowed(PDO $pdo, string $email): int {
+    $stmt = $pdo->prepare('SELECT extra_allowed FROM free_download_grants WHERE email = :email');
+    $stmt->execute([':email' => $email]);
+    $value = $stmt->fetchColumn();
+    return $value === false ? 0 : (int) $value;
+}
+
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 try {
@@ -409,6 +462,10 @@ try {
             $code = trim((string) ($_POST['index'] ?? ''));
             $blurb = trim((string) ($_POST['blurb'] ?? ''));
             $link = trim((string) ($_POST['link'] ?? '')) ?: '#';
+            $type = strtolower(trim((string) ($_POST['type'] ?? 'paid')));
+            if (!in_array($type, ['free', 'paid'], true)) {
+                $type = 'paid';
+            }
 
             $coverName = null;
             if (!empty($_FILES['cover']['tmp_name']) && $_FILES['cover']['error'] === UPLOAD_ERR_OK) {
@@ -437,8 +494,8 @@ try {
             $maxOrder = (int) db()->query('SELECT COALESCE(MAX(sort_order), 0) FROM books')->fetchColumn();
 
             $stmt = db()->prepare(
-                'INSERT INTO books (title, year, code, blurb, link, cover, pdf, is_sample, sort_order)
-                 VALUES (:title, :year, :code, :blurb, :link, :cover, :pdf, 0, :sort_order)'
+                'INSERT INTO books (title, year, code, blurb, link, cover, pdf, book_type, is_sample, sort_order)
+                 VALUES (:title, :year, :code, :blurb, :link, :cover, :pdf, :book_type, 0, :sort_order)'
             );
             $stmt->execute([
                 ':title' => $title,
@@ -448,6 +505,7 @@ try {
                 ':link' => $link,
                 ':cover' => $coverName,
                 ':pdf' => $pdfName,
+                ':book_type' => $type,
                 ':sort_order' => $maxOrder + 1,
             ]);
 
@@ -580,6 +638,115 @@ try {
 
             $del = db()->prepare('DELETE FROM reader_requests WHERE id = :id');
             $del->execute([':id' => $id]);
+
+            out(['ok' => true]);
+            break;
+
+        case 'request_free_download':
+            // Honeypot: stesso trucco usato in submit_request. Se il campo
+            // arriva valorizzato è quasi certamente un bot: fingiamo
+            // successo senza scrivere nulla né rivelare alcun link.
+            $honeypot = trim((string) ($_POST['hp_check'] ?? ''));
+            if ($honeypot !== '') {
+                out(['ok' => true]);
+            }
+
+            $email = normalizeEmail((string) ($_POST['email'] ?? ''));
+            $bookId = (int) ($_POST['book_id'] ?? 0);
+
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$bookId) {
+                out(['error' => 'invalid_request'], 400);
+            }
+
+            $pdo = db();
+
+            $bookStmt = $pdo->prepare('SELECT id, title, pdf, book_type FROM books WHERE id = :id');
+            $bookStmt->execute([':id' => $bookId]);
+            $book = $bookStmt->fetch();
+
+            if (!$book || $book['book_type'] !== 'free' || empty($book['pdf'])) {
+                out(['error' => 'not_available'], 404);
+            }
+
+            $used = freeDownloadsUsed($pdo, $email);
+            $allowed = 1 + freeDownloadExtraAllowed($pdo, $email);
+
+            if ($used >= $allowed) {
+                out(['error' => 'limit_reached'], 403);
+            }
+
+            $bookTitle = $book['title'] ?: ('Book #' . $book['id']);
+
+            $ins = $pdo->prepare(
+                'INSERT INTO free_downloads (email, book_id, book_title) VALUES (:email, :book_id, :book_title)'
+            );
+            $ins->execute([
+                ':email' => $email,
+                ':book_id' => (int) $book['id'],
+                ':book_title' => $bookTitle,
+            ]);
+
+            // Notifica silenziosa all'autore: se Brevo non è configurato,
+            // sendEmail non fa nulla e il download prosegue comunque.
+            sendEmail(
+                ADMIN_NOTIFY_EMAIL,
+                EMAIL_FROM_NAME,
+                'Free download used — ' . $bookTitle,
+                '<p><strong>' . htmlspecialchars($email) . '</strong> just used a free download for <strong>' . htmlspecialchars($bookTitle) . '</strong>.</p>' .
+                '<p>Downloads used so far by this address: ' . ($used + 1) . ' of ' . $allowed . ' allowed.</p>'
+            );
+
+            out(['ok' => true, 'pdfUrl' => PDF_UPLOAD_URL . $book['pdf']]);
+            break;
+
+        case 'list_free_downloads':
+            requireAdmin();
+
+            $pdo = db();
+            $rows = $pdo->query(
+                'SELECT email,
+                        COUNT(*) AS downloads_used,
+                        MAX(created_at) AS last_download,
+                        GROUP_CONCAT(book_title SEPARATOR \', \') AS books
+                 FROM free_downloads
+                 GROUP BY email
+                 ORDER BY last_download DESC'
+            )->fetchAll();
+
+            $grantRows = $pdo->query('SELECT email, extra_allowed FROM free_download_grants')->fetchAll();
+            $grants = [];
+            foreach ($grantRows as $g) {
+                $grants[$g['email']] = (int) $g['extra_allowed'];
+            }
+
+            $result = array_map(function (array $r) use ($grants): array {
+                $extra = $grants[$r['email']] ?? 0;
+                return [
+                    'email' => $r['email'],
+                    'downloadsUsed' => (int) $r['downloads_used'],
+                    'extraAllowed' => $extra,
+                    'allowed' => 1 + $extra,
+                    'lastDownload' => $r['last_download'],
+                    'books' => $r['books'],
+                ];
+            }, $rows);
+
+            out(['downloads' => $result]);
+            break;
+
+        case 'grant_extra_download':
+            requireAdmin();
+
+            $email = normalizeEmail((string) ($_POST['email'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                out(['error' => 'invalid_email'], 400);
+            }
+
+            $stmt = db()->prepare(
+                'INSERT INTO free_download_grants (email, extra_allowed) VALUES (:email, 1)
+                 ON DUPLICATE KEY UPDATE extra_allowed = extra_allowed + 1'
+            );
+            $stmt->execute([':email' => $email]);
 
             out(['ok' => true]);
             break;

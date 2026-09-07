@@ -276,6 +276,21 @@
     border-radius:999px;
     padding:3px 9px;
   }
+  .price-chip{
+    position:absolute;
+    top:18px;
+    left:18px;
+    z-index:1;
+    font-family:var(--font-mono);
+    font-size:0.62rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--blue);
+    background:var(--paper-card);
+    border:1px solid var(--blue);
+    border-radius:999px;
+    padding:3px 9px;
+  }
   .book-index{
     font-family:var(--font-display);
     font-style:italic;
@@ -314,6 +329,56 @@
   .book-link:hover{ color:var(--amber); }
   .book-link .arrow{ transition:transform .15s ease; }
   .book-link:hover .arrow{ transform:translateX(3px); }
+  button.book-link{
+    background:none;
+    border:none;
+    padding:0;
+    font:inherit;
+    letter-spacing:0.04em;
+    cursor:pointer;
+  }
+
+  /* ---------- Download modal (free books) ---------- */
+  .download-modal{
+    position:fixed;
+    inset:0;
+    z-index:50;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .download-modal-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(8,10,16,0.55);
+  }
+  .download-modal-card{
+    position:relative;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:14px;
+    padding:28px;
+    max-width:400px;
+    width:100%;
+    box-shadow:var(--shadow-card);
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .download-modal-close{
+    position:absolute;
+    top:10px;
+    right:12px;
+    background:none;
+    border:none;
+    font-size:1.5rem;
+    line-height:1;
+    color:var(--ink-faint);
+    cursor:pointer;
+  }
+  .download-modal-close:hover{ color:var(--ink); }
+  .download-modal-card form{ display:flex; flex-direction:column; gap:14px; }
 
   /* ---------- ARC / reader team ---------- */
   .arc-panel{
@@ -414,6 +479,23 @@
   .field textarea:focus{ border-color:var(--blue); }
   .field textarea{ resize:vertical; min-height:52px; }
   .field select{ cursor:pointer; }
+  .admin-type-options{
+    display:flex;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  .admin-type-option{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:var(--font-body);
+    font-size:0.9rem;
+    color:var(--ink);
+    text-transform:none;
+    letter-spacing:normal;
+    cursor:pointer;
+  }
+  .admin-type-option input{ cursor:pointer; }
   .field input[type="file"]{
     border:1px dashed var(--paper-line);
     background:transparent;
@@ -545,6 +627,22 @@
   }
   .admin-remove-btn:hover{ color:var(--danger); border-color:var(--danger); }
   .admin-remove-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .grant-btn{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--blue);
+    background:none;
+    border:1px solid var(--blue);
+    border-radius:6px;
+    padding:6px 10px;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+    flex-shrink:0;
+  }
+  .grant-btn:hover{ background:var(--blue); color:var(--blue-ink); }
+  .grant-btn:disabled{ opacity:0.5; cursor:not-allowed; }
   .admin-toggle{
     font-family:var(--font-mono);
     font-size:0.76rem;
@@ -790,7 +888,18 @@
               <textarea id="admin-blurb" name="blurb" rows="2" placeholder="A sentence or two about the book"></textarea>
             </div>
             <div class="field">
-              <label for="admin-link">Link (Amazon, KDP, etc.)</label>
+              <label>Book type</label>
+              <div class="admin-type-options">
+                <label class="admin-type-option">
+                  <input type="radio" name="book_type" value="paid" checked> Paid &mdash; link to Amazon
+                </label>
+                <label class="admin-type-option">
+                  <input type="radio" name="book_type" value="free"> Free &mdash; PDF download
+                </label>
+              </div>
+            </div>
+            <div class="field">
+              <label for="admin-link">Amazon link (for paid books)</label>
               <input type="url" id="admin-link" name="link" placeholder="https://...">
             </div>
             <div class="field">
@@ -801,7 +910,7 @@
               </div>
             </div>
             <div class="field">
-              <label for="admin-pdf">PDF file (optional, for the free reader copy)</label>
+              <label for="admin-pdf">PDF file (for free books &mdash; also used for reader-team early copies)</label>
               <input type="file" id="admin-pdf" name="pdf" accept="application/pdf">
               <span class="pdf-file-name" id="admin-pdf-name"></span>
             </div>
@@ -819,6 +928,12 @@
           <p class="section-note" id="admin-requests-note">People who filled out the "Join the Reader Team" form below.</p>
           <div class="admin-list" id="admin-requests-list"></div>
         </div>
+
+        <div class="admin-requests-section">
+          <span class="label">Free downloads</span>
+          <p class="section-note" id="admin-downloads-note">One free book per email address. Grant an extra one once they've left a review.</p>
+          <div class="admin-list" id="admin-downloads-list"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -834,6 +949,28 @@
     </div>
   </div>
 </footer>
+
+<div class="download-modal" id="download-modal" hidden>
+  <div class="download-modal-backdrop" data-close="1"></div>
+  <div class="download-modal-card">
+    <button type="button" class="download-modal-close" id="download-modal-close" aria-label="Close">&times;</button>
+    <h3 id="download-modal-title">Get the free PDF</h3>
+    <p class="section-note">One free book per email address. Enter yours and the download starts right away.</p>
+    <form id="download-modal-form" novalidate>
+      <input type="hidden" id="download-modal-book-id" name="book_id">
+      <div class="field">
+        <label for="download-modal-email">Email</label>
+        <input type="email" id="download-modal-email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="hp-field" aria-hidden="true">
+        <label for="download-modal-hp">Leave this field empty</label>
+        <input type="text" id="download-modal-hp" name="hp_check" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+      </div>
+      <button type="submit" class="btn btn-primary">Get the PDF</button>
+      <span class="arc-status" id="download-modal-status" aria-live="polite"></span>
+    </form>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -879,19 +1016,30 @@
     card.className = 'book-card';
 
     var chipHtml = book.sample ? '<span class="sample-chip">Sample</span>' : '';
+    var priceChipHtml = book.type === 'free' ? '<span class="price-chip">Free</span>' : '';
     var altText = book.title ? ('Cover of ' + book.title) : 'Book cover';
     var visualHtml = book.cover
       ? '<img class="book-cover-img" src="' + escapeHtml(book.cover) + '" alt="' + escapeHtml(altText) + '">'
       : '<div class="book-index">' + escapeHtml(book.index || '') + '</div>';
     var titleHtml = book.title ? ('<h3 class="book-title">' + escapeHtml(book.title) + '</h3>') : '';
 
+    var ctaHtml;
+    if (book.type === 'free' && book.hasPdf) {
+      ctaHtml = '<button type="button" class="book-link book-download-trigger" data-book-id="' + escapeHtml(book.id) + '" data-book-title="' + escapeHtml(bookLabel(book)) + '">Download the PDF <span class="arrow">&darr;</span></button>';
+    } else if (book.type === 'paid') {
+      ctaHtml = '<a class="book-link" href="' + escapeHtml(book.link || '#') + '" target="_blank" rel="noopener">Buy on Amazon <span class="arrow">&rarr;</span></a>';
+    } else {
+      ctaHtml = '<a class="book-link" href="' + escapeHtml(book.link || '#') + '">Learn more <span class="arrow">&rarr;</span></a>';
+    }
+
     card.innerHTML =
       chipHtml +
+      priceChipHtml +
       visualHtml +
       titleHtml +
       '<div class="book-meta">' + escapeHtml(book.year || '') + '</div>' +
       '<p class="book-blurb">' + escapeHtml(book.blurb || '') + '</p>' +
-      '<a class="book-link" href="' + escapeHtml(book.link || '#') + '">Learn more <span class="arrow">&rarr;</span></a>';
+      ctaHtml;
 
     return card;
   }
@@ -919,6 +1067,93 @@
     applyRevealObserver();
   }
 
+  /* =====================================================================
+     FREE DOWNLOAD MODAL
+     One click on a free book's "Download the PDF" button asks for an
+     email address, then lets api.php enforce the one-book-per-email
+     limit (with the author able to grant extra ones from the panel).
+     ===================================================================== */
+  var downloadModal = document.getElementById('download-modal');
+  var downloadModalTitle = document.getElementById('download-modal-title');
+  var downloadModalBookId = document.getElementById('download-modal-book-id');
+  var downloadModalForm = document.getElementById('download-modal-form');
+  var downloadModalEmail = document.getElementById('download-modal-email');
+  var downloadModalStatus = document.getElementById('download-modal-status');
+  var downloadModalClose = document.getElementById('download-modal-close');
+
+  function openDownloadModal(bookId, bookTitle){
+    downloadModalForm.reset();
+    downloadModalStatus.textContent = '';
+    downloadModalBookId.value = bookId;
+    downloadModalTitle.textContent = 'Get "' + bookTitle + '"';
+    downloadModal.hidden = false;
+    downloadModalEmail.focus();
+  }
+
+  function closeDownloadModal(){
+    downloadModal.hidden = true;
+  }
+
+  document.getElementById('library-grid').addEventListener('click', function(evt){
+    var trigger = evt.target.closest('.book-download-trigger');
+    if (!trigger) { return; }
+    openDownloadModal(trigger.getAttribute('data-book-id'), trigger.getAttribute('data-book-title'));
+  });
+
+  downloadModalClose.addEventListener('click', closeDownloadModal);
+  downloadModal.addEventListener('click', function(evt){
+    if (evt.target.hasAttribute('data-close')) { closeDownloadModal(); }
+  });
+  document.addEventListener('keydown', function(evt){
+    if (evt.key === 'Escape' && !downloadModal.hidden) { closeDownloadModal(); }
+  });
+
+  downloadModalForm.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    if (!downloadModalForm.reportValidity()) { return; }
+
+    var email = downloadModalEmail.value.trim();
+    var bookId = downloadModalBookId.value;
+    var hpCheck = document.getElementById('download-modal-hp').value;
+
+    var body = new URLSearchParams();
+    body.set('action', 'request_free_download');
+    body.set('email', email);
+    body.set('book_id', bookId);
+    body.set('hp_check', hpCheck);
+
+    var submitBtn = downloadModalForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    downloadModalStatus.textContent = 'Checking…';
+
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function(res){
+        return res.json().catch(function(){ return {}; }).then(function(data){
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function(r){
+        submitBtn.disabled = false;
+        if (r.ok && r.data && r.data.pdfUrl) {
+          downloadModalStatus.textContent = "Here it comes — your download is starting.";
+          window.location.href = r.data.pdfUrl;
+          setTimeout(closeDownloadModal, 1200);
+        } else if (r.data && r.data.error === 'limit_reached') {
+          downloadModalStatus.textContent = "You've already used your free download. Leave a review on the book you got, then ask me to unlock another one.";
+        } else if (r.data && r.data.error === 'not_available') {
+          downloadModalStatus.textContent = "This book isn't available as a free download right now.";
+        } else if (r.data && r.data.error === 'invalid_request') {
+          downloadModalStatus.textContent = 'Please double-check your email address.';
+        } else {
+          downloadModalStatus.textContent = "Couldn't process that. Please try again.";
+        }
+      })
+      .catch(function(){
+        submitBtn.disabled = false;
+        downloadModalStatus.textContent = "Couldn't reach the server. Please try again.";
+      });
+  });
+
   function populateBookSelect(){
     var select = document.getElementById('arc-book');
     var previous = select.value;
@@ -942,11 +1177,13 @@
     var thumbHtml = book.cover
       ? '<img class="admin-thumb" src="' + escapeHtml(book.cover) + '" alt="">'
       : '<div class="admin-thumb admin-thumb-placeholder">' + escapeHtml((book.index || '').slice(0, 6)) + '</div>';
+    var typeLabel = book.type === 'free' ? 'Free' : 'Paid';
+    var pdfLabel = book.hasPdf ? ' &middot; PDF ready' : (book.type === 'free' ? ' &middot; no PDF yet' : '');
     row.innerHTML =
       thumbHtml +
       '<div class="admin-row-info">' +
         '<div class="admin-row-title">' + escapeHtml(bookLabel(book)) + '</div>' +
-        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + (book.hasPdf ? ' &middot; PDF ready' : ' &middot; no PDF yet') + '</div>' +
+        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + ' &middot; ' + typeLabel + pdfLabel + '</div>' +
       '</div>' +
       '<button type="button" class="admin-remove-btn" data-id="' + escapeHtml(book.id) + '">Remove</button>';
     return row;
@@ -1058,12 +1295,15 @@
   var adminLogoutBtn = document.getElementById('admin-logout-btn');
   var adminRequestsList = document.getElementById('admin-requests-list');
   var adminRequestsNote = document.getElementById('admin-requests-note');
+  var adminDownloadsList = document.getElementById('admin-downloads-list');
+  var adminDownloadsNote = document.getElementById('admin-downloads-note');
 
   function showAdminUnlocked(){
     adminGateForm.hidden = true;
     adminContent.hidden = false;
     adminNote.textContent = 'Add or remove books from the catalog, cover upload included.';
     loadRequests();
+    loadFreeDownloads();
   }
 
   function showAdminLocked(){
@@ -1169,6 +1409,75 @@
       .catch(function(){ btn.disabled = false; });
   });
 
+  /* =====================================================================
+     FREE DOWNLOADS (admin)
+     One row per email address that has used a free download. The author
+     can grant one extra download to a given address (e.g. after they've
+     left a review) with the button on the right.
+     ===================================================================== */
+  function renderDownloadRow(dl){
+    var row = document.createElement('div');
+    row.className = 'request-row';
+    row.innerHTML =
+      '<div class="request-row-top">' +
+        '<div>' +
+          '<div class="request-name">' + escapeHtml(dl.email) + '</div>' +
+          '<div class="request-meta">' + escapeHtml(dl.downloadsUsed) + ' of ' + escapeHtml(dl.allowed) + ' used &middot; last on ' + escapeHtml(formatRequestDate(dl.lastDownload)) + '</div>' +
+        '</div>' +
+        '<div class="request-book">' + escapeHtml(dl.books || '') + '</div>' +
+      '</div>' +
+      '<div class="request-actions">' +
+        '<button type="button" class="grant-btn" data-email="' + escapeHtml(dl.email) + '">Grant +1 download</button>' +
+      '</div>';
+    return row;
+  }
+
+  function renderDownloadsList(downloads){
+    adminDownloadsList.innerHTML = '';
+    if (!downloads.length) {
+      var empty = document.createElement('p');
+      empty.className = 'section-note';
+      empty.textContent = 'No free downloads yet.';
+      adminDownloadsList.appendChild(empty);
+      return;
+    }
+    downloads.forEach(function(dl){ adminDownloadsList.appendChild(renderDownloadRow(dl)); });
+  }
+
+  function loadFreeDownloads(){
+    return fetch(API + '?action=list_free_downloads', { credentials: 'same-origin' })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        renderDownloadsList((data && data.downloads) || []);
+      })
+      .catch(function(){
+        adminDownloadsNote.textContent = "Couldn't load downloads right now.";
+      });
+  }
+
+  adminDownloadsList.addEventListener('click', function(evt){
+    var btn = evt.target.closest('.grant-btn[data-email]');
+    if (!btn || btn.disabled) { return; }
+    var email = btn.getAttribute('data-email');
+
+    var body = new URLSearchParams();
+    body.set('action', 'grant_extra_download');
+    body.set('email', email);
+
+    btn.disabled = true;
+    fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function(res){ return { ok: res.ok, status: res.status }; })
+      .then(function(r){
+        if (r.ok) { return loadFreeDownloads(); }
+        if (r.status === 401) {
+          showAdminLocked();
+        } else {
+          btn.disabled = false;
+        }
+      })
+      .catch(function(){ btn.disabled = false; });
+  });
+
   function checkSession(){
     return fetch(API + '?action=session', { credentials: 'same-origin' })
       .then(function(res){ return res.json(); })
@@ -1255,6 +1564,8 @@
     formData.set('index', document.getElementById('admin-index').value.trim());
     formData.set('blurb', document.getElementById('admin-blurb').value.trim());
     formData.set('link', document.getElementById('admin-link').value.trim());
+    var typeRadio = adminAddForm.querySelector('input[name="book_type"]:checked');
+    formData.set('type', typeRadio ? typeRadio.value : 'paid');
     if (file) { formData.set('cover', file); }
     if (pdfFile) { formData.set('pdf', pdfFile); }
 
