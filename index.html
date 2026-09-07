@@ -377,6 +377,10 @@
     justify-content:center;
     padding:20px;
   }
+  /* Senza questa riga, l'attributo "hidden" viene ignorato: la regola
+     sopra imposta display:flex sull'elemento a prescindere, perché una
+     classe batte sempre la regola predefinita del browser per [hidden]. */
+  .download-modal[hidden]{ display:none; }
   .download-modal-backdrop{
     position:absolute;
     inset:0;
