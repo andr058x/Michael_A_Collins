@@ -134,6 +134,18 @@ function ensureSchema(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
+    // Tabella delle migrazioni "una tantum" già applicate, per non ripetere
+    // due volte un'operazione come "sostituisci il catalogo di prova con
+    // quello vero" a ogni deploy.
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS migrations (
+            name VARCHAR(100) NOT NULL,
+            applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+    runRealCatalogMigration($pdo);
+
     static $checkedSeed = false;
     if ($checkedSeed) {
         return;
@@ -157,6 +169,78 @@ function ensureSchema(PDO $pdo): void {
     foreach ($samples as $book) {
         $seed->execute($book);
     }
+}
+
+/**
+ * Migrazione una tantum: toglie i 3 libri di prova (quelli con
+ * is_sample = 1) e carica il catalogo vero dell'autore, con le copertine
+ * reali. Le immagini sorgente vivono in /seed-covers (dentro il repository,
+ * quindi arrivano con ogni deploy) e vengono copiate dentro UPLOAD_DIR — la
+ * cartella collegata al Volume persistente — con lo stesso schema di nome
+ * casuale usato per le copertine caricate a mano dal pannello. Il titolo è
+ * lasciato vuoto di proposito: è già ben leggibile sulla copertina stessa.
+ */
+function runRealCatalogMigration(PDO $pdo): void {
+    $migrationName = 'seed_real_catalog_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    $oldRows = $pdo->query('SELECT id, cover, pdf FROM books WHERE is_sample = 1')->fetchAll();
+    foreach ($oldRows as $old) {
+        deleteCoverFile($old['cover']);
+        deletePdfFile($old['pdf']);
+    }
+    $pdo->exec('DELETE FROM books WHERE is_sample = 1');
+
+    $catalog = [
+        ['source' => 'book-01.jpg', 'blurb' => 'A step-by-step, no-code walkthrough for building real income streams with simple AI tools — including the Realistic AI Income Framework, for people with zero technical background.'],
+        ['source' => 'book-02.jpg', 'blurb' => 'Turn a plain-language idea into a working, deployed application by talking to AI — planning, building, previewing and shipping, with a Chat to Code & Cowork quick-start cheat sheet included.'],
+        ['source' => 'book-03.jpg', 'blurb' => 'A practical framework for managing AI risk, staying compliant, and building accountability into everyday operations — with a 90-day rollout planner to put governance into practice.'],
+        ['source' => 'book-04.jpg', 'blurb' => 'A hands-on blueprint for designing and automating intelligent file organization with Python and AI, from collecting and sorting files to monitoring and improving the system over time.'],
+        ['source' => 'book-05.jpg', 'blurb' => 'The art and science of writing prompts that consistently get better results from ChatGPT, with a 7-day Craft System implementation planner to put the techniques into practice fast.'],
+        ['source' => 'book-06.jpg', 'blurb' => 'A no-code guide to connecting your everyday tools and automating repetitive office workflows, so you get your time back — includes a ready-to-use workflow cheat sheet.'],
+        ['source' => 'book-07.jpg', 'blurb' => 'Build intelligent agents and automate real workflows without writing code, using an Agentic AI Starter Kit of pre-built prompt templates for ten common business tasks.'],
+        ['source' => 'book-08.jpg', 'blurb' => "A beginner-friendly 30-day system for using generative AI tools like ChatGPT with confidence — no jargon, no guesswork, just a clear starting point today."],
+        ['source' => 'book-09.jpg', 'blurb' => 'A 60-day plan for automating the operations of a one-person business with AI, from marketing to customer service, without hiring or learning to code.'],
+        ['source' => 'book-10.jpg', 'blurb' => 'A 30-day system for building an AI lead engine that finds, qualifies, and follows up with prospects automatically — no code and no cold-calling required.'],
+    ];
+
+    if (!is_dir(UPLOAD_DIR)) {
+        @mkdir(UPLOAD_DIR, 0755, true);
+    }
+
+    $insert = $pdo->prepare(
+        'INSERT INTO books (title, year, code, blurb, link, cover, pdf, book_type, is_sample, sort_order)
+         VALUES (:title, :year, :code, :blurb, :link, :cover, NULL, :book_type, 0, :sort_order)'
+    );
+
+    $sortOrder = 1;
+    foreach ($catalog as $entry) {
+        $sourcePath = __DIR__ . '/seed-covers/' . $entry['source'];
+        $coverName = null;
+        if (is_file($sourcePath)) {
+            $coverName = bin2hex(random_bytes(12)) . '.jpg';
+            @copy($sourcePath, UPLOAD_DIR . $coverName);
+        }
+
+        $insert->execute([
+            ':title' => '',
+            ':year' => '2026',
+            ':code' => '',
+            ':blurb' => $entry['blurb'],
+            ':link' => '#',
+            ':cover' => $coverName,
+            ':book_type' => 'paid',
+            ':sort_order' => $sortOrder,
+        ]);
+        $sortOrder++;
+    }
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
 }
 
 function out($data, int $code = 200): void {

@@ -314,7 +314,36 @@
     color:var(--ink-faint);
     letter-spacing:0.04em;
   }
-  .book-blurb{ color:var(--ink-soft); font-size:0.94rem; }
+  .book-blurb{ color:var(--ink-soft); font-size:0.94rem; margin:0; }
+  .book-details-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:none;
+    border:none;
+    padding:0;
+    font-family:var(--font-mono);
+    font-size:0.74rem;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    cursor:pointer;
+    transition:color .15s ease;
+  }
+  .book-details-toggle:hover{ color:var(--blue); }
+  .book-details-toggle .chevron{
+    display:inline-block;
+    transition:transform .25s ease;
+  }
+  .book-details-toggle[aria-expanded="true"] .chevron{ transform:rotate(180deg); }
+  .book-blurb-wrap{
+    display:grid;
+    grid-template-rows:0fr;
+    transition:grid-template-rows .35s ease;
+  }
+  .book-blurb-wrap.is-open{ grid-template-rows:1fr; }
+  .book-blurb-inner{ overflow:hidden; }
+  .book-blurb-inner .book-blurb{ padding-top:8px; }
   .book-link{
     font-family:var(--font-mono);
     font-size:0.78rem;
@@ -705,6 +734,32 @@
     transition:border-color .15s ease;
   }
   .request-reply-link:hover{ border-color:var(--blue); }
+  .requests-book-group{ display:flex; flex-direction:column; gap:10px; }
+  .requests-book-group + .requests-book-group{
+    margin-top:18px;
+    padding-top:18px;
+    border-top:1px dashed var(--paper-line);
+  }
+  .requests-book-heading{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .requests-book-name{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:1rem;
+    color:var(--ink);
+  }
+  .requests-book-count{
+    font-family:var(--font-mono);
+    font-size:0.7rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+  }
 
   /* ---------- Footer ---------- */
   footer{
@@ -1021,7 +1076,10 @@
     var visualHtml = book.cover
       ? '<img class="book-cover-img" src="' + escapeHtml(book.cover) + '" alt="' + escapeHtml(altText) + '">'
       : '<div class="book-index">' + escapeHtml(book.index || '') + '</div>';
-    var titleHtml = book.title ? ('<h3 class="book-title">' + escapeHtml(book.title) + '</h3>') : '';
+    // Se c'è già una copertina vera, il titolo scritto di nuovo sotto
+    // sarebbe solo una ripetizione: lo mostriamo come testo separato solo
+    // quando manca la copertina (così resta comunque leggibile).
+    var titleHtml = (book.title && !book.cover) ? ('<h3 class="book-title">' + escapeHtml(book.title) + '</h3>') : '';
 
     var ctaHtml;
     if (book.type === 'free' && book.hasPdf) {
@@ -1032,13 +1090,30 @@
       ctaHtml = '<a class="book-link" href="' + escapeHtml(book.link || '#') + '">Learn more <span class="arrow">&rarr;</span></a>';
     }
 
+    // La descrizione resta chiusa finché non si clicca su "Details": si apre
+    // con un piccolo effetto a fisarmonica invece di stare sempre visibile
+    // sotto la copertina.
+    var detailsHtml = '';
+    if (book.blurb) {
+      var blurbId = 'book-blurb-' + escapeHtml(book.id);
+      detailsHtml =
+        '<button type="button" class="book-details-toggle" aria-expanded="false" aria-controls="' + blurbId + '">' +
+          'Details <span class="chevron">&#9662;</span>' +
+        '</button>' +
+        '<div class="book-blurb-wrap" id="' + blurbId + '">' +
+          '<div class="book-blurb-inner">' +
+            '<p class="book-blurb">' + escapeHtml(book.blurb) + '</p>' +
+          '</div>' +
+        '</div>';
+    }
+
     card.innerHTML =
       chipHtml +
       priceChipHtml +
       visualHtml +
       titleHtml +
       '<div class="book-meta">' + escapeHtml(book.year || '') + '</div>' +
-      '<p class="book-blurb">' + escapeHtml(book.blurb || '') + '</p>' +
+      detailsHtml +
       ctaHtml;
 
     return card;
@@ -1095,6 +1170,14 @@
   }
 
   document.getElementById('library-grid').addEventListener('click', function(evt){
+    var detailsToggle = evt.target.closest('.book-details-toggle');
+    if (detailsToggle) {
+      var isOpen = detailsToggle.getAttribute('aria-expanded') === 'true';
+      detailsToggle.setAttribute('aria-expanded', String(!isOpen));
+      var wrap = document.getElementById(detailsToggle.getAttribute('aria-controls'));
+      if (wrap) { wrap.classList.toggle('is-open', !isOpen); }
+      return;
+    }
     var trigger = evt.target.closest('.book-download-trigger');
     if (!trigger) { return; }
     openDownloadModal(trigger.getAttribute('data-book-id'), trigger.getAttribute('data-book-title'));
@@ -1363,6 +1446,24 @@
     return row;
   }
 
+  /* Raggruppa le richieste per libro scelto, mantenendo l'ordine con cui
+     ogni libro compare per primo nell'elenco (che arriva già ordinato dal
+     più recente al più vecchio) — così il libro con la richiesta più
+     recente appare per primo. */
+  function groupRequestsByBook(requests){
+    var groups = [];
+    var indexByBook = {};
+    requests.forEach(function(req){
+      var key = req.book || 'Not sure / surprise me';
+      if (!(key in indexByBook)) {
+        indexByBook[key] = groups.length;
+        groups.push({ book: key, items: [] });
+      }
+      groups[indexByBook[key]].items.push(req);
+    });
+    return groups;
+  }
+
   function renderRequestsList(requests){
     adminRequestsList.innerHTML = '';
     if (!requests.length) {
@@ -1372,7 +1473,19 @@
       adminRequestsList.appendChild(empty);
       return;
     }
-    requests.forEach(function(req){ adminRequestsList.appendChild(renderRequestRow(req)); });
+    groupRequestsByBook(requests).forEach(function(group){
+      var section = document.createElement('div');
+      section.className = 'requests-book-group';
+      var countLabel = group.items.length + (group.items.length === 1 ? ' request' : ' requests');
+      var heading = document.createElement('div');
+      heading.className = 'requests-book-heading';
+      heading.innerHTML =
+        '<span class="requests-book-name">' + escapeHtml(group.book) + '</span>' +
+        '<span class="requests-book-count">' + escapeHtml(countLabel) + '</span>';
+      section.appendChild(heading);
+      group.items.forEach(function(req){ section.appendChild(renderRequestRow(req)); });
+      adminRequestsList.appendChild(section);
+    });
   }
 
   function loadRequests(){
