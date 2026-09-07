@@ -660,6 +660,26 @@
   }
   .admin-remove-btn:hover{ color:var(--danger); border-color:var(--danger); }
   .admin-remove-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .admin-edit-btn{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    background:none;
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:6px 10px;
+    cursor:pointer;
+    transition:color .15s ease, border-color .15s ease;
+    flex-shrink:0;
+    margin-right:6px;
+  }
+  .admin-edit-btn:hover{ color:var(--blue); border-color:var(--blue); }
+  .admin-edit-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .admin-row-btns{ display:flex; flex-shrink:0; }
+  .admin-form-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .admin-row.is-editing{ border-color:var(--blue); }
   .grant-btn{
     font-family:var(--font-mono);
     font-size:0.72rem;
@@ -973,7 +993,10 @@
               <input type="file" id="admin-pdf" name="pdf" accept="application/pdf">
               <span class="pdf-file-name" id="admin-pdf-name"></span>
             </div>
-            <button type="submit" class="btn btn-primary">Add to library</button>
+            <div class="admin-form-actions">
+              <button type="submit" class="btn btn-primary" id="admin-submit-btn">Add to library</button>
+              <button type="button" class="btn btn-ghost" id="admin-cancel-edit-btn" hidden>Cancel edit</button>
+            </div>
             <span class="arc-status" id="admin-status" aria-live="polite"></span>
           </form>
           <div class="admin-list-wrap">
@@ -1060,6 +1083,7 @@
      step, no separate "versions" of the site to keep in sync.
      ===================================================================== */
   var books = [];
+  var editingId = null;
 
   /* Some books are added with a cover image only, no typed title (the
      title is already readable on the cover, so retyping it would just be
@@ -1260,19 +1284,23 @@
 
   function renderAdminRow(book){
     var row = document.createElement('div');
-    row.className = 'admin-row';
+    row.className = 'admin-row' + (editingId !== null && String(editingId) === String(book.id) ? ' is-editing' : '');
     var thumbHtml = book.cover
       ? '<img class="admin-thumb" src="' + escapeHtml(book.cover) + '" alt="">'
       : '<div class="admin-thumb admin-thumb-placeholder">' + escapeHtml((book.index || '').slice(0, 6)) + '</div>';
     var typeLabel = book.type === 'free' ? 'Free' : 'Paid';
     var pdfLabel = book.hasPdf ? ' &middot; PDF ready' : (book.type === 'free' ? ' &middot; no PDF yet' : '');
+    var linkLabel = book.type === 'paid' ? (book.link && book.link !== '#' ? ' &middot; link set' : ' &middot; no Amazon link yet') : '';
     row.innerHTML =
       thumbHtml +
       '<div class="admin-row-info">' +
         '<div class="admin-row-title">' + escapeHtml(bookLabel(book)) + '</div>' +
-        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + ' &middot; ' + typeLabel + pdfLabel + '</div>' +
+        '<div class="admin-row-meta">' + escapeHtml(book.year || '') + (book.sample ? ' &middot; sample' : '') + ' &middot; ' + typeLabel + pdfLabel + linkLabel + '</div>' +
       '</div>' +
-      '<button type="button" class="admin-remove-btn" data-id="' + escapeHtml(book.id) + '">Remove</button>';
+      '<div class="admin-row-btns">' +
+        '<button type="button" class="admin-edit-btn" data-id="' + escapeHtml(book.id) + '">Edit</button>' +
+        '<button type="button" class="admin-remove-btn" data-id="' + escapeHtml(book.id) + '">Remove</button>' +
+      '</div>';
     return row;
   }
 
@@ -1384,6 +1412,8 @@
   var adminRequestsNote = document.getElementById('admin-requests-note');
   var adminDownloadsList = document.getElementById('admin-downloads-list');
   var adminDownloadsNote = document.getElementById('admin-downloads-note');
+  var adminSubmitBtn = document.getElementById('admin-submit-btn');
+  var adminCancelEditBtn = document.getElementById('admin-cancel-edit-btn');
 
   function showAdminUnlocked(){
     adminGateForm.hidden = true;
@@ -1662,20 +1692,61 @@
     adminPdfName.textContent = file ? file.name : '';
   });
 
+  function startEditBook(book){
+    editingId = book.id;
+    document.getElementById('admin-title').value = book.title || '';
+    document.getElementById('admin-year').value = book.year || '';
+    document.getElementById('admin-index').value = book.index || '';
+    document.getElementById('admin-blurb').value = book.blurb || '';
+    document.getElementById('admin-link').value = (book.link && book.link !== '#') ? book.link : '';
+    var typeToCheck = adminAddForm.querySelector('input[name="book_type"][value="' + (book.type === 'free' ? 'free' : 'paid') + '"]');
+    if (typeToCheck) { typeToCheck.checked = true; }
+    adminCoverInput.value = '';
+    adminCoverPreview.hidden = true;
+    adminCoverPreviewImg.removeAttribute('src');
+    adminPdfInput.value = '';
+    adminPdfName.textContent = '';
+    adminSubmitBtn.textContent = 'Save changes';
+    adminCancelEditBtn.hidden = false;
+    adminStatus.textContent = 'Editing "' + bookLabel(book) + '". Leave cover/PDF empty to keep the current ones.';
+    renderAdminList();
+    adminAddForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function stopEditBook(){
+    editingId = null;
+    adminAddForm.reset();
+    adminCoverPreview.hidden = true;
+    adminCoverPreviewImg.removeAttribute('src');
+    adminPdfName.textContent = '';
+    adminSubmitBtn.textContent = 'Add to library';
+    adminCancelEditBtn.hidden = true;
+    renderAdminList();
+  }
+
+  adminCancelEditBtn.addEventListener('click', function(){
+    stopEditBook();
+    adminStatus.textContent = '';
+  });
+
   adminAddForm.addEventListener('submit', function(evt){
     evt.preventDefault();
     if (!adminAddForm.reportValidity()) { return; }
 
+    var isEditing = editingId !== null;
     var title = document.getElementById('admin-title').value.trim();
     var file = adminCoverInput.files && adminCoverInput.files[0];
     var pdfFile = adminPdfInput.files && adminPdfInput.files[0];
-    if (!title && !file) {
+    var existingBook = isEditing ? books.filter(function(b){ return String(b.id) === String(editingId); })[0] : null;
+    var willHaveCover = !!file || (isEditing && existingBook && existingBook.cover);
+    if (!title && !willHaveCover) {
       adminStatus.textContent = 'Add a title, a cover image, or both.';
       return;
     }
 
     var formData = new FormData();
-    formData.set('action', 'add');
+    formData.set('action', isEditing ? 'update' : 'add');
+    if (isEditing) { formData.set('id', String(editingId)); }
     formData.set('title', title);
     formData.set('year', document.getElementById('admin-year').value.trim() || String(new Date().getFullYear()));
     formData.set('index', document.getElementById('admin-index').value.trim());
@@ -1696,11 +1767,15 @@
       })
       .then(function(r){
         if (r.ok) {
+          var wasEditing = isEditing;
+          editingId = null;
           adminAddForm.reset();
           adminCoverPreview.hidden = true;
           adminCoverPreviewImg.removeAttribute('src');
           adminPdfName.textContent = '';
-          adminStatus.textContent = 'Added. Now live for every visitor.';
+          adminSubmitBtn.textContent = 'Add to library';
+          adminCancelEditBtn.hidden = true;
+          adminStatus.textContent = wasEditing ? 'Saved. Changes are now live.' : 'Added. Now live for every visitor.';
           return loadBooks();
         }
         if (r.status === 401) {
@@ -1712,6 +1787,10 @@
           adminStatus.textContent = "That file doesn't look like a valid PDF (or it's over 60MB). Try again, or skip the PDF for now.";
         } else if (r.data && r.data.error === 'missing_title_or_cover') {
           adminStatus.textContent = 'Add a title, a cover image, or both.';
+        } else if (r.data && r.data.error === 'not_found') {
+          adminStatus.textContent = "That book doesn't exist anymore.";
+          stopEditBook();
+          loadBooks();
         } else {
           adminStatus.textContent = "Couldn't save. Please try again.";
         }
@@ -1722,6 +1801,14 @@
   });
 
   document.getElementById('admin-list').addEventListener('click', function(evt){
+    var editBtn = evt.target.closest('.admin-edit-btn');
+    if (editBtn && !editBtn.disabled) {
+      var editId = editBtn.getAttribute('data-id');
+      var bookToEdit = books.filter(function(b){ return String(b.id) === String(editId); })[0];
+      if (bookToEdit) { startEditBook(bookToEdit); }
+      return;
+    }
+
     var btn = evt.target.closest('.admin-remove-btn');
     if (!btn || btn.disabled) { return; }
     var id = btn.getAttribute('data-id');
@@ -1737,7 +1824,10 @@
     fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
       .then(function(res){ return { ok: res.ok, status: res.status }; })
       .then(function(r){
-        if (r.ok) { return loadBooks(); }
+        if (r.ok) {
+          if (String(editingId) === String(id)) { stopEditBook(); }
+          return loadBooks();
+        }
         if (r.status === 401) {
           adminStatus.textContent = 'Your session expired: log in again.';
           showAdminLocked();

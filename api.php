@@ -618,6 +618,81 @@ try {
             out(['ok' => true]);
             break;
 
+        case 'update':
+            // Modifica un libro già esistente (es. aggiungere il link Amazon
+            // dopo la migrazione iniziale) senza doverlo cancellare e
+            // ricreare, così copertina/pdf/blurb restano intatti se non
+            // vengono toccati.
+            requireAdmin();
+
+            $id = (int) ($_POST['id'] ?? 0);
+            if (!$id) {
+                out(['error' => 'missing_id'], 400);
+            }
+
+            $stmt = db()->prepare('SELECT * FROM books WHERE id = :id');
+            $stmt->execute([':id' => $id]);
+            $existing = $stmt->fetch();
+            if (!$existing) {
+                out(['error' => 'not_found'], 404);
+            }
+
+            $title = trim((string) ($_POST['title'] ?? $existing['title']));
+            $year = trim((string) ($_POST['year'] ?? $existing['year']));
+            $code = trim((string) ($_POST['index'] ?? $existing['code']));
+            $blurb = trim((string) ($_POST['blurb'] ?? $existing['blurb']));
+            $link = trim((string) ($_POST['link'] ?? $existing['link']));
+            if ($link === '') {
+                $link = '#';
+            }
+            $type = strtolower(trim((string) ($_POST['type'] ?? $existing['book_type'])));
+            if (!in_array($type, ['free', 'paid'], true)) {
+                $type = $existing['book_type'];
+            }
+
+            if ($title === '' && empty($existing['cover']) && empty($_FILES['cover']['tmp_name'])) {
+                out(['error' => 'missing_title_or_cover'], 400);
+            }
+
+            $coverName = $existing['cover'];
+            if (!empty($_FILES['cover']['tmp_name']) && $_FILES['cover']['error'] === UPLOAD_ERR_OK) {
+                $newCover = saveCoverUpload($_FILES['cover']);
+                if ($newCover === false) {
+                    out(['error' => 'invalid_image'], 400);
+                }
+                deleteCoverFile($existing['cover']);
+                $coverName = $newCover;
+            }
+
+            $pdfName = $existing['pdf'];
+            if (!empty($_FILES['pdf']['tmp_name']) && $_FILES['pdf']['error'] === UPLOAD_ERR_OK) {
+                $newPdf = savePdfUpload($_FILES['pdf']);
+                if ($newPdf === false) {
+                    out(['error' => 'invalid_pdf'], 400);
+                }
+                deletePdfFile($existing['pdf']);
+                $pdfName = $newPdf;
+            }
+
+            $stmt = db()->prepare(
+                'UPDATE books SET title = :title, year = :year, code = :code, blurb = :blurb,
+                 link = :link, cover = :cover, pdf = :pdf, book_type = :book_type WHERE id = :id'
+            );
+            $stmt->execute([
+                ':title' => $title,
+                ':year' => $year,
+                ':code' => $code,
+                ':blurb' => $blurb,
+                ':link' => $link,
+                ':cover' => $coverName,
+                ':pdf' => $pdfName,
+                ':book_type' => $type,
+                ':id' => $id,
+            ]);
+
+            out(['ok' => true]);
+            break;
+
         case 'submit_request':
             // Modulo pubblico "Join the Reader Team": chiunque può inviarlo,
             // niente login richiesto. Il campo "hp_check" è un honeypot
