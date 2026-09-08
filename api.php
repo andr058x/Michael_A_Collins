@@ -829,8 +829,27 @@ function enqueueReviewEmail(PDO $pdo, string $email, string $name, string $bookT
         ':email' => $email,
         ':name' => $name,
         ':title' => $bookTitle,
-        ':link' => $bookLink,
+        ':link' => buildAmazonReviewLink($bookLink),
     ]);
+}
+
+/**
+ * A partire dal link Amazon della pagina prodotto (es.
+ * https://www.amazon.com/dp/B0HG6RLQGJ, lo stesso che inserisci nel
+ * pannello autore), costruisce il link diretto alla pagina "Scrivi una
+ * recensione cliente" invece della semplice pagina prodotto: così chi
+ * clicca nell'email arriva già pronto a scrivere, senza dover cercare da
+ * solo il pulsante sulla pagina del libro. Riconosce sia
+ * amazon.com/dp/ASIN che amazon.com/Titolo-Libro/dp/ASIN e le varianti
+ * /gp/product/ASIN, su qualunque dominio Amazon (.com, .co.uk, .it, ecc.).
+ * Se il link non è in un formato riconosciuto, usa il link originale così
+ * com'è: meglio un link che funziona comunque piuttosto che uno rotto.
+ */
+function buildAmazonReviewLink(string $productLink): string {
+    if (preg_match('~^(https?://[^/]+)/(?:[^/]+/)?(?:dp|gp/product)/([A-Z0-9]{10})~i', $productLink, $m)) {
+        return $m[1] . '/review/create-review?asin=' . strtoupper($m[2]);
+    }
+    return $productLink;
 }
 
 /**
