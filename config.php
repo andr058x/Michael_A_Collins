@@ -51,7 +51,7 @@ define('ADMIN_NOTIFY_EMAIL', getenv('ADMIN_NOTIFY_EMAIL') ?: 'andrea.mirenna@gma
 // sul tuo account Brevo). Se non imposti EMAIL_FROM_ADDRESS, si usa lo
 // stesso indirizzo che riceve le notifiche.
 define('EMAIL_FROM_ADDRESS', getenv('EMAIL_FROM_ADDRESS') ?: ADMIN_NOTIFY_EMAIL);
-define('EMAIL_FROM_NAME', getenv('EMAIL_FROM_NAME') ?: 'Micheal A. Collins');
+define('EMAIL_FROM_NAME', getenv('EMAIL_FROM_NAME') ?: 'Michael A. Collins');
 // La chiave API di Brevo: la imposti come variabile d'ambiente
 // BREVO_API_KEY su Railway (mai nel codice). Finché non è impostata, le
 // richieste del Reader Team continuano a salvarsi regolarmente nel

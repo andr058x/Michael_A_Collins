@@ -145,6 +145,7 @@ function ensureSchema(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
     runRealCatalogMigration($pdo);
+    runCoverPaddingFixMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -243,6 +244,59 @@ function runRealCatalogMigration(PDO $pdo): void {
     $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
 }
 
+/**
+ * Migrazione una tantum: alcune delle copertine caricate dalla migrazione
+ * del catalogo reale (seed_real_catalog_v1) avevano un rapporto
+ * larghezza/altezza leggermente diverso da libro a libro; il riquadro del
+ * catalogo è invece fisso 2:3, quindi il browser ritagliava le copertine
+ * più strette, rischiando di tagliare il titolo o il nome dell'autore
+ * vicino ai bordi. I file dentro /seed-covers sono stati corretti per
+ * essere tutti esattamente 2:3 (bordi aggiunti ai lati, colore preso dallo
+ * sfondo della copertina stessa); qui li ricarichiamo al posto delle copie
+ * già in uso, nello stesso ordine con cui sono stati inseriti.
+ */
+function runCoverPaddingFixMigration(PDO $pdo): void {
+    $migrationName = 'fix_cover_padding_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    // Se nel frattempo sono stati aggiunti o rimossi libri a mano dal
+    // pannello, l'ordine per sort_order non corrisponde più in modo
+    // affidabile alle 10 copertine originali: meglio non toccare nulla
+    // piuttosto che rischiare di sovrascrivere la copertina di un libro
+    // aggiunto a mano.
+    $count = (int) $pdo->query('SELECT COUNT(*) FROM books WHERE is_sample = 0')->fetchColumn();
+    if ($count === 10) {
+        $rows = $pdo->query(
+            'SELECT id, cover FROM books WHERE is_sample = 0 ORDER BY sort_order ASC, id ASC LIMIT 10'
+        )->fetchAll();
+
+        if (!is_dir(UPLOAD_DIR)) {
+            @mkdir(UPLOAD_DIR, 0755, true);
+        }
+
+        $update = $pdo->prepare('UPDATE books SET cover = :cover WHERE id = :id');
+        $position = 1;
+        foreach ($rows as $row) {
+            $sourcePath = __DIR__ . '/seed-covers/' . sprintf('book-%02d.jpg', $position);
+            if (is_file($sourcePath)) {
+                $newCoverName = bin2hex(random_bytes(12)) . '.jpg';
+                if (@copy($sourcePath, UPLOAD_DIR . $newCoverName)) {
+                    deleteCoverFile($row['cover']);
+                    $update->execute([':cover' => $newCoverName, ':id' => $row['id']]);
+                }
+            }
+            $position++;
+        }
+    }
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
 function out($data, int $code = 200): void {
     http_response_code($code);
     echo json_encode($data);
@@ -322,8 +376,38 @@ function saveCoverUpload(array $file) {
     $w = max(1, (int) round($srcW * $ratio));
     $h = max(1, (int) round($srcH * $ratio));
 
-    $dst = imagecreatetruecolor($w, $h);
-    imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, $srcW, $srcH);
+    $resized = imagecreatetruecolor($w, $h);
+    imagecopyresampled($resized, $src, 0, 0, 0, 0, $w, $h, $srcW, $srcH);
+    imagedestroy($src);
+
+    // Le copertine vengono sempre mostrate in un riquadro 2:3 nel catalogo.
+    // Se la copertina caricata ha un rapporto diverso (es. più stretta),
+    // invece di lasciare che il CSS la ritagli — rischiando di tagliare il
+    // titolo o il nome dell'autore vicino ai bordi — la incorniciamo qui su
+    // una tela 2:3 esatta, riempiendo lo spazio in eccesso con un colore
+    // preso dai bordi dell'immagine stessa (di solito lo sfondo della
+    // copertina), così il bordo aggiunto si nota pochissimo.
+    $targetRatio = 2 / 3;
+    $currentRatio = $w / $h;
+    if (abs($currentRatio - $targetRatio) > 0.002) {
+        $fill = averageEdgeColor($resized, $w, $h);
+        if ($currentRatio < $targetRatio) {
+            $canvasW = max($w, (int) round($h * $targetRatio));
+            $canvasH = $h;
+        } else {
+            $canvasW = $w;
+            $canvasH = max($h, (int) round($w / $targetRatio));
+        }
+        $dst = imagecreatetruecolor($canvasW, $canvasH);
+        $fillColor = imagecolorallocate($dst, $fill[0], $fill[1], $fill[2]);
+        imagefill($dst, 0, 0, $fillColor);
+        $offsetX = (int) round(($canvasW - $w) / 2);
+        $offsetY = (int) round(($canvasH - $h) / 2);
+        imagecopy($dst, $resized, $offsetX, $offsetY, 0, 0, $w, $h);
+        imagedestroy($resized);
+    } else {
+        $dst = $resized;
+    }
 
     if (!is_dir(UPLOAD_DIR)) {
         @mkdir(UPLOAD_DIR, 0755, true);
@@ -331,10 +415,36 @@ function saveCoverUpload(array $file) {
 
     $name = bin2hex(random_bytes(12)) . '.jpg';
     $ok = imagejpeg($dst, UPLOAD_DIR . $name, 82);
-    imagedestroy($src);
     imagedestroy($dst);
 
     return $ok ? $name : false;
+}
+
+/**
+ * Campiona i pixel lungo il bordo dell'immagine e ne restituisce il colore
+ * medio [r, g, b]. Usato per riempire in modo discreto lo spazio aggiunto
+ * quando una copertina viene incorniciata su una tela 2:3 (vedi sopra).
+ */
+function averageEdgeColor($im, int $w, int $h): array {
+    $samples = [];
+    $stepX = max(1, (int) floor($w / 40));
+    $stepY = max(1, (int) floor($h / 40));
+    for ($x = 0; $x < $w; $x += $stepX) {
+        $samples[] = imagecolorat($im, $x, 0);
+        $samples[] = imagecolorat($im, $x, $h - 1);
+    }
+    for ($y = 0; $y < $h; $y += $stepY) {
+        $samples[] = imagecolorat($im, 0, $y);
+        $samples[] = imagecolorat($im, $w - 1, $y);
+    }
+    $r = 0; $g = 0; $b = 0;
+    foreach ($samples as $rgb) {
+        $r += ($rgb >> 16) & 0xFF;
+        $g += ($rgb >> 8) & 0xFF;
+        $b += $rgb & 0xFF;
+    }
+    $count = max(1, count($samples));
+    return [(int) round($r / $count), (int) round($g / $count), (int) round($b / $count)];
 }
 
 function deleteCoverFile(?string $name): void {
@@ -753,7 +863,7 @@ try {
                 '<strong>Book:</strong> ' . htmlspecialchars($book ?: 'Not sure / surprise me') . '</p>' .
                 ($message !== '' ? '<p><strong>Message:</strong><br>' . nl2br(htmlspecialchars($message)) . '</p>' : '') .
                 '<p><a href="' . htmlspecialchars($siteUrl) . '/#pannello-autore">Open the author panel</a></p>';
-            sendEmail(ADMIN_NOTIFY_EMAIL, 'Micheal A. Collins', 'New Reader Team request — ' . $name, $adminHtml);
+            sendEmail(ADMIN_NOTIFY_EMAIL, 'Michael A. Collins', 'New Reader Team request — ' . $name, $adminHtml);
 
             // --- Conferma al lettore ---
             if ($requestedBook && $requestedBook['pdf']) {
@@ -762,13 +872,13 @@ try {
                     '<p>Thanks for joining the reader team! Here is your free copy of <strong>' . htmlspecialchars($bookTitle) . '</strong>:</p>' .
                     '<p><a href="' . htmlspecialchars($downloadUrl) . '">Download your copy</a></p>' .
                     '<p>Once you have had a chance to read it, I would really appreciate an honest review.</p>' .
-                    '<p>Thanks again,<br>Micheal</p>';
+                    '<p>Thanks again,<br>Michael</p>';
             } else {
                 $readerHtml = '<p>Hi ' . htmlspecialchars($name) . ',</p>' .
                     '<p>Thanks for joining the reader team! I have received your request for <strong>' . htmlspecialchars($bookTitle) . '</strong> and will send your free copy by email shortly.</p>' .
-                    '<p>Thanks again,<br>Micheal</p>';
+                    '<p>Thanks again,<br>Michael</p>';
             }
-            sendEmail($email, $name, 'Your free copy from Micheal A. Collins', $readerHtml);
+            sendEmail($email, $name, 'Your free copy from Michael A. Collins', $readerHtml);
 
             // Contatto Brevo per l'automazione "chiedi la recensione dopo
             // qualche giorno" (configurata dentro Brevo, non qui).
