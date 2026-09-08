@@ -1,0 +1,12 @@
+{
+  "name": "review-email-cron",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Chiama una volta al giorno l'endpoint del sito che spedisce le email 'chiedi la recensione' ormai scadute. Pensato per girare come Cron Job su Railway, servizio separato dal sito principale.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

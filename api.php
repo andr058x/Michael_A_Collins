@@ -133,6 +133,20 @@ function ensureSchema(PDO $pdo): void {
             PRIMARY KEY (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS review_email_queue (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            email VARCHAR(255) NOT NULL,
+            name VARCHAR(255) DEFAULT \'\',
+            book_title VARCHAR(255) DEFAULT \'\',
+            book_link VARCHAR(500) DEFAULT \'\',
+            send_at DATETIME NOT NULL,
+            sent TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY send_at_idx (sent, send_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
 
     // Tabella delle migrazioni "una tantum" già applicate, per non ripetere
     // due volte un'operazione come "sostituisci il catalogo di prova con
@@ -785,6 +799,61 @@ function sendBrevoNewBookCampaign(string $bookTitle, string $bookBlurb, ?string 
     return true;
 }
 
+/**
+ * Mette in coda l'email "chiedi la recensione", da spedire tra
+ * REVIEW_EMAIL_DELAY_DAYS giorni (vedi action=send_due_review_emails più
+ * sotto e il Cron Job su Railway che lo richiama ogni giorno). Non fa
+ * nulla se manca un link valido del libro — senza link non ci sarebbe
+ * dove mandare a lasciare la recensione — o se per quella email+libro
+ * c'è già una mail in coda non ancora spedita, per evitare doppioni se la
+ * stessa persona richiede lo stesso libro più volte.
+ */
+function enqueueReviewEmail(PDO $pdo, string $email, string $name, string $bookTitle, string $bookLink): void {
+    if ($bookLink === '' || $bookLink === '#') {
+        return;
+    }
+
+    $check = $pdo->prepare(
+        'SELECT id FROM review_email_queue WHERE email = :email AND book_title = :title AND sent = 0 LIMIT 1'
+    );
+    $check->execute([':email' => $email, ':title' => $bookTitle]);
+    if ($check->fetch()) {
+        return;
+    }
+
+    $ins = $pdo->prepare(
+        'INSERT INTO review_email_queue (email, name, book_title, book_link, send_at)
+         VALUES (:email, :name, :title, :link, DATE_ADD(NOW(), INTERVAL ' . REVIEW_EMAIL_DELAY_DAYS . ' DAY))'
+    );
+    $ins->execute([
+        ':email' => $email,
+        ':name' => $name,
+        ':title' => $bookTitle,
+        ':link' => $bookLink,
+    ]);
+}
+
+/**
+ * Corpo HTML dell'email "chiedi la recensione": spiega subito che non
+ * serve aver comprato il libro su Amazon per lasciare una recensione (le
+ * recensioni "non verificate" sono permesse dalle regole di Amazon), poi
+ * chiede una recensione onesta — mai una recensione positiva, che le
+ * regole di Amazon vietano di richiedere.
+ */
+function reviewRequestEmailHtml(string $bookTitle, string $bookLink): string {
+    $safeTitle = htmlspecialchars($bookTitle);
+    $safeLink = htmlspecialchars($bookLink);
+    return '<p>Hi,</p>' .
+        '<p>A little while ago you grabbed a free copy of <strong>' . $safeTitle . '</strong> — I hope you have had a chance to dig into it.</p>' .
+        '<p>If you have, I would love to ask you for something small: an honest review on Amazon. It makes a real difference for an independent author — reviews are how new readers decide whether to trust a book they have never heard of.</p>' .
+        '<p>One thing a lot of people do not realize: <strong>you do not need to have bought the book on Amazon to leave a review there.</strong> Amazon lets anyone with an account in good standing post what is called an "unverified" review — it just will not carry the little "Verified Purchase" badge, but it counts exactly the same and is completely within Amazon\'s rules.</p>' .
+        '<p>It does not need to be long. Two or three honest sentences about what you liked (or did not) are more than enough — and it does not have to be five stars. I would rather have a real opinion than a polite one.</p>' .
+        '<p><a href="' . $safeLink . '"><strong>Leave your review here</strong></a></p>' .
+        '<p>One more thing: once you have left it, just reply to this email and let me know — I will personally unlock a second book from my library for you, completely free, as a thank-you.</p>' .
+        '<p>Thanks for reading,<br>Michael</p>' .
+        '<p style="color:#888;font-size:0.85em;">P.S. If you would like to mention in your review that you got the book for free, that is completely fine and honestly appreciated — it keeps things transparent. Totally your call, not a requirement.</p>';
+}
+
 function rowToRequest(array $r): array {
     return [
         'id' => (int) $r['id'],
@@ -1098,6 +1167,7 @@ try {
                 ? $requestedBook['link']
                 : '';
             addBrevoContact($email, $name, $bookTitle, $bookLinkForBrevo);
+            enqueueReviewEmail(db(), $email, $name, $bookTitle, $bookLinkForBrevo);
 
             out(['ok' => true]);
             break;
@@ -1185,6 +1255,7 @@ try {
             // l'email (non il nome), quindi FIRSTNAME resta vuoto qui.
             $bookLinkForBrevo = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
             addBrevoContact($email, '', $bookTitle, $bookLinkForBrevo);
+            enqueueReviewEmail($pdo, $email, '', $bookTitle, $bookLinkForBrevo);
 
             // Il libro non si scarica più direttamente dal sito: il link
             // arriva via email (tramite Brevo), così il lettore deve avere
@@ -1211,6 +1282,44 @@ try {
             // comportamento con il link diretto, così il download funziona
             // sempre anche prima di aver impostato BREVO_API_KEY.
             out(['ok' => true, 'emailSent' => false, 'pdfUrl' => PDF_UPLOAD_URL . $book['pdf']]);
+            break;
+
+        case 'send_due_review_emails':
+            // Endpoint pensato per essere chiamato solo dal servizio Cron
+            // Job su Railway (mai da un browser): niente sessione admin,
+            // solo una chiave segreta condivisa. Se CRON_SECRET non è
+            // configurata, l'endpoint resta disattivato per sicurezza.
+            $providedKey = (string) ($_GET['key'] ?? $_POST['key'] ?? '');
+            if (CRON_SECRET === '' || !hash_equals(CRON_SECRET, $providedKey)) {
+                out(['error' => 'forbidden'], 403);
+            }
+
+            $pdo = db();
+            $due = $pdo->query(
+                'SELECT id, email, name, book_title, book_link FROM review_email_queue
+                 WHERE sent = 0 AND send_at <= NOW()
+                 ORDER BY send_at ASC
+                 LIMIT 25'
+            )->fetchAll();
+
+            $sentCount = 0;
+            foreach ($due as $row) {
+                $ok = sendEmail(
+                    $row['email'],
+                    $row['name'] ?: '',
+                    'Got a minute for an honest review?',
+                    reviewRequestEmailHtml($row['book_title'], $row['book_link'])
+                );
+                if ($ok) {
+                    $sentCount++;
+                    $upd = $pdo->prepare('UPDATE review_email_queue SET sent = 1 WHERE id = :id');
+                    $upd->execute([':id' => $row['id']]);
+                } else {
+                    error_log('send_due_review_emails: sendEmail failed for queue row ' . $row['id']);
+                }
+            }
+
+            out(['ok' => true, 'due' => count($due), 'sent' => $sentCount]);
             break;
 
         case 'list_free_downloads':

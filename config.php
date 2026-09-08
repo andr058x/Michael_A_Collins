@@ -58,6 +58,21 @@ define('EMAIL_FROM_NAME', getenv('EMAIL_FROM_NAME') ?: 'Michael A. Collins');
 // pannello autore — semplicemente non parte nessuna email.
 define('BREVO_API_KEY', getenv('BREVO_API_KEY') ?: '');
 // La lista Brevo ("Reader Team") in cui finisce ogni persona che richiede
-// un libro: serve per l'automazione che chiede la recensione qualche
-// giorno dopo, impostata direttamente dentro Brevo (non nel codice).
+// un libro: usata anche solo per tenere i contatti organizzati dentro
+// Brevo (l'email "chiedi la recensione" gestita da questo file non passa
+// più da un'automazione Brevo, vedi sotto).
 define('BREVO_READER_LIST_ID', (int) (getenv('BREVO_READER_LIST_ID') ?: 2));
+
+// --- Email automatica "chiedi la recensione dopo qualche giorno" ---
+// Gestita interamente da questo sito (non da Brevo): ogni richiesta di
+// libro gratuito viene messa in una coda con la data in cui va spedita la
+// mail, e un piccolo servizio Railway a parte (un Cron Job) chiama ogni
+// giorno l'endpoint action=send_due_review_emails per spedire quelle
+// ormai scadute. CRON_SECRET è la chiave segreta che protegge quella
+// chiamata: la imposti come variabile d'ambiente CRON_SECRET su Railway,
+// sia su questo servizio sia sul servizio cron, con lo stesso valore.
+// Finché non è impostata, l'endpoint resta disattivato per sicurezza.
+define('CRON_SECRET', getenv('CRON_SECRET') ?: '');
+// Quanti giorni aspettare dopo il download prima di chiedere la
+// recensione.
+define('REVIEW_EMAIL_DELAY_DAYS', (int) (getenv('REVIEW_EMAIL_DELAY_DAYS') ?: 7));
