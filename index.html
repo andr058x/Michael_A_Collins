@@ -531,6 +531,7 @@
     flex-direction:column;
     gap:6px;
   }
+  .field[hidden]{ display:none; }
   .field label{
     font-family:var(--font-mono);
     font-size:0.7rem;
@@ -998,7 +999,7 @@
               <label for="arc-email">Email</label>
               <input type="email" id="arc-email" name="email" placeholder="you@example.com" required autocomplete="email">
             </div>
-            <div class="field">
+            <div class="field" id="arc-book-field">
               <label for="arc-book">Book you're interested in</label>
               <select id="arc-book" name="book"></select>
             </div>
@@ -1419,23 +1420,44 @@
      quindi elencare solo i libri davvero impostati come gratis in questo
      momento, non l'intero catalogo (la maggior parte è a pagamento su
      Amazon). Se in futuro più libri diventano gratis, compaiono qui da
-     soli, senza bisogno di toccare il codice. */
+     soli, senza bisogno di toccare il codice. Finché c'è un solo libro
+     gratis (il caso normale in questo momento) non ha senso mostrare un
+     menu a tendina con dentro una sola scelta: il campo viene nascosto e
+     il libro viene assegnato in automatico, il form resta comunque
+     corretto perché il valore del <select> nascosto viene comunque
+     inviato.  */
   function populateBookSelect(){
     var select = document.getElementById('arc-book');
+    var field = document.getElementById('arc-book-field');
     var previous = select.value;
     var freeBooks = books.filter(function(book){ return book.type === 'free'; });
     select.innerHTML = '';
-    var anyOption = document.createElement('option');
-    anyOption.value = '';
-    anyOption.textContent = freeBooks.length > 1 ? 'Not sure / surprise me' : 'Send me the free book';
-    select.appendChild(anyOption);
-    freeBooks.forEach(function(book){
+
+    if (freeBooks.length > 1) {
+      field.hidden = false;
+      var anyOption = document.createElement('option');
+      anyOption.value = '';
+      anyOption.textContent = 'Not sure / surprise me';
+      select.appendChild(anyOption);
+      freeBooks.forEach(function(book){
+        var opt = document.createElement('option');
+        opt.value = String(book.id);
+        opt.textContent = bookLabel(book);
+        select.appendChild(opt);
+      });
+      if (previous) { select.value = previous; }
+    } else {
+      // Zero o un solo libro gratis: niente scelta da fare, quindi niente
+      // menu da mostrare. Con un libro gratis il valore viene comunque
+      // impostato su quel libro, così il resto del form (e l'email
+      // all'autore) sa sempre a quale libro si riferisce la richiesta.
+      field.hidden = true;
       var opt = document.createElement('option');
-      opt.value = String(book.id);
-      opt.textContent = bookLabel(book);
+      opt.value = freeBooks.length === 1 ? String(freeBooks[0].id) : '';
+      opt.textContent = freeBooks.length === 1 ? bookLabel(freeBooks[0]) : 'Send me the free book';
+      opt.selected = true;
       select.appendChild(opt);
-    });
-    if (previous) { select.value = previous; }
+    }
   }
 
   function renderAdminRow(book){
