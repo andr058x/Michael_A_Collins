@@ -148,6 +148,7 @@ function ensureSchema(PDO $pdo): void {
     runCoverPaddingFixMigration($pdo);
     runBookTitlesFixMigration($pdo);
     runAllBooksFreeMigration($pdo);
+    runFeatureSingleFreeBookMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -377,6 +378,34 @@ function runAllBooksFreeMigration(PDO $pdo): void {
     }
 
     $pdo->exec("UPDATE books SET book_type = 'free' WHERE book_type <> 'free'");
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
+/**
+ * Migrazione una tantum: su richiesta dell'autore, torna a un solo libro
+ * gratis in vetrina ("How to Create Passive Income Using AI", messo in
+ * evidenza in apertura del sito) e tutti gli altri a pagamento per ora.
+ * Gli altri libri restano comunque distribuibili gratis "a mano" tramite
+ * il form Reader Team (che non guarda il tipo del libro): è lì che un
+ * lettore può chiedere il libro successivo dopo aver lasciato una
+ * recensione, come spiegato nella sezione "Join the Reader Team".
+ */
+function runFeatureSingleFreeBookMigration(PDO $pdo): void {
+    $migrationName = 'feature_single_free_book_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    $featuredTitle = 'How to Create Passive Income Using AI';
+
+    $pdo->prepare("UPDATE books SET book_type = 'paid' WHERE title <> :title")
+        ->execute([':title' => $featuredTitle]);
+    $pdo->prepare("UPDATE books SET book_type = 'free' WHERE title = :title")
+        ->execute([':title' => $featuredTitle]);
 
     $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
 }
@@ -672,6 +701,90 @@ function addBrevoContact(string $email, string $name, string $bookTitle, string 
     return true;
 }
 
+/**
+ * Crea e invia subito una campagna email a tutta la lista BREVO_READER_LIST_ID
+ * ("Reader Team") per annunciare un nuovo libro appena aggiunto dal pannello
+ * autore. Usa l'API "Campaigns" di Brevo, diversa dall'email transazionale
+ * di sendEmail(): quella manda un solo messaggio a un solo destinatario,
+ * questa manda un unico invio a tutti gli iscritti della lista in un colpo
+ * solo. Se BREVO_API_KEY non è impostata, non fa nulla e torna false: il
+ * libro viene comunque salvato normalmente, semplicemente non parte
+ * l'annuncio via email.
+ */
+function sendBrevoNewBookCampaign(string $bookTitle, string $bookBlurb, ?string $coverUrl, string $bookLink): bool {
+    if (BREVO_API_KEY === '') {
+        error_log('sendBrevoNewBookCampaign skipped: BREVO_API_KEY not configured');
+        return false;
+    }
+
+    $safeTitle = htmlspecialchars($bookTitle);
+    $html = '<p>Hi,</p>' .
+        '<p>I just published a brand new book: <strong>' . $safeTitle . '</strong>.</p>' .
+        ($bookBlurb !== '' ? '<p>' . nl2br(htmlspecialchars($bookBlurb)) . '</p>' : '') .
+        ($coverUrl ? '<p><img src="' . htmlspecialchars($coverUrl) . '" alt="' . $safeTitle . '" style="max-width:220px;height:auto;"></p>' : '') .
+        ($bookLink && $bookLink !== '#' ? '<p><a href="' . htmlspecialchars($bookLink) . '">Get it here</a></p>' : '') .
+        '<p>Thanks for being part of the Reader Team!<br>Michael</p>';
+
+    $createPayload = json_encode([
+        'name' => 'New book: ' . $bookTitle . ' (' . date('Y-m-d H:i') . ')',
+        'subject' => 'New book just published: ' . $bookTitle,
+        'sender' => ['email' => EMAIL_FROM_ADDRESS, 'name' => EMAIL_FROM_NAME],
+        'type' => 'classic',
+        'htmlContent' => $html,
+        'recipients' => ['listIds' => [BREVO_READER_LIST_ID]],
+    ]);
+
+    $ch = curl_init('https://api.brevo.com/v3/emailCampaigns');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $createPayload,
+        CURLOPT_HTTPHEADER => [
+            'accept: application/json',
+            'api-key: ' . BREVO_API_KEY,
+            'content-type: application/json',
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+    ]);
+    $result = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($status < 200 || $status >= 300) {
+        error_log('sendBrevoNewBookCampaign create failed (status ' . $status . '): ' . ($curlErr ?: $result));
+        return false;
+    }
+
+    $created = json_decode((string) $result, true);
+    $campaignId = $created['id'] ?? null;
+    if (!$campaignId) {
+        error_log('sendBrevoNewBookCampaign: no campaign id in response: ' . $result);
+        return false;
+    }
+
+    $ch2 = curl_init('https://api.brevo.com/v3/emailCampaigns/' . $campaignId . '/sendNow');
+    curl_setopt_array($ch2, [
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            'accept: application/json',
+            'api-key: ' . BREVO_API_KEY,
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+    ]);
+    $result2 = curl_exec($ch2);
+    $status2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+    $curlErr2 = curl_error($ch2);
+    curl_close($ch2);
+
+    if ($status2 < 200 || $status2 >= 300) {
+        error_log('sendBrevoNewBookCampaign sendNow failed (status ' . $status2 . '): ' . ($curlErr2 ?: $result2));
+        return false;
+    }
+    return true;
+}
+
 function rowToRequest(array $r): array {
     return [
         'id' => (int) $r['id'],
@@ -787,7 +900,22 @@ try {
                 ':sort_order' => $maxOrder + 1,
             ]);
 
-            out(['ok' => true, 'id' => (int) db()->lastInsertId()]);
+            $newBookId = (int) db()->lastInsertId();
+
+            // Se l'autore ha lasciato la casella "Email the Reader Team"
+            // spuntata (è il valore di default), avvisa tutta la lista che
+            // è uscito un nuovo libro. Non blocca mai il salvataggio: se
+            // Brevo non è configurata o la chiamata fallisce, il libro resta
+            // comunque aggiunto normalmente.
+            if (!empty($_POST['notify_list']) && BREVO_API_KEY !== '') {
+                $scheme = $isHttps ? 'https' : 'http';
+                $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+                $coverUrlForCampaign = $coverName ? $siteUrl . '/' . UPLOAD_URL . $coverName : null;
+                $linkForCampaign = ($link && $link !== '#') ? $link : '';
+                sendBrevoNewBookCampaign($title ?: 'New book', $blurb, $coverUrlForCampaign, $linkForCampaign);
+            }
+
+            out(['ok' => true, 'id' => $newBookId]);
             break;
 
         case 'remove':
@@ -1013,7 +1141,7 @@ try {
 
             $pdo = db();
 
-            $bookStmt = $pdo->prepare('SELECT id, title, pdf, book_type FROM books WHERE id = :id');
+            $bookStmt = $pdo->prepare('SELECT id, title, link, pdf, book_type FROM books WHERE id = :id');
             $bookStmt->execute([':id' => $bookId]);
             $book = $bookStmt->fetch();
 
@@ -1049,7 +1177,40 @@ try {
                 '<p>Downloads used so far by this address: ' . ($used + 1) . ' of ' . $allowed . ' allowed.</p>'
             );
 
-            out(['ok' => true, 'pdfUrl' => PDF_UPLOAD_URL . $book['pdf']]);
+            // Stesso contatto/lista Brevo usato dal form "Join the Reader
+            // Team": così l'automazione "chiedi la recensione dopo qualche
+            // giorno" configurata dentro Brevo parte anche per chi scarica
+            // un libro gratis direttamente dal catalogo, non solo per chi
+            // passa dal form Reader Team. Il modulo di download chiede solo
+            // l'email (non il nome), quindi FIRSTNAME resta vuoto qui.
+            $bookLinkForBrevo = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
+            addBrevoContact($email, '', $bookTitle, $bookLinkForBrevo);
+
+            // Il libro non si scarica più direttamente dal sito: il link
+            // arriva via email (tramite Brevo), così il lettore deve avere
+            // accesso reale alla casella indicata e il flusso somiglia a
+            // quello di un vero invio "lead magnet" invece che a un
+            // download istantaneo cliccabile da chiunque.
+            $scheme = $isHttps ? 'https' : 'http';
+            $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $downloadUrl = $siteUrl . '/' . PDF_UPLOAD_URL . $book['pdf'];
+
+            $readerHtml = '<p>Hi,</p>' .
+                '<p>Thanks for requesting <strong>' . htmlspecialchars($bookTitle) . '</strong> — here is your free copy:</p>' .
+                '<p><a href="' . htmlspecialchars($downloadUrl) . '">Download your copy</a></p>' .
+                '<p>Once you have had a chance to read it, I would really appreciate an honest review — just reply to this email and let me know, and I will send you the next book for free too.</p>' .
+                '<p>Thanks,<br>Michael</p>';
+            $emailSent = sendEmail($email, '', 'Your free copy of ' . $bookTitle, $readerHtml);
+
+            if ($emailSent) {
+                out(['ok' => true, 'emailSent' => true]);
+            }
+
+            // Se Brevo non è ancora configurato (o l'invio è fallito), non
+            // lasciamo il lettore a mani vuote: torniamo comunque al vecchio
+            // comportamento con il link diretto, così il download funziona
+            // sempre anche prima di aver impostato BREVO_API_KEY.
+            out(['ok' => true, 'emailSent' => false, 'pdfUrl' => PDF_UPLOAD_URL . $book['pdf']]);
             break;
 
         case 'list_free_downloads':

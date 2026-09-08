@@ -193,6 +193,39 @@
     gap:14px;
   }
 
+  /* ---------- Featured free book ---------- */
+  .featured-free{ padding:0 0 clamp(56px,8vw,88px); }
+  .featured-free-panel{
+    display:grid;
+    grid-template-columns:200px 1fr;
+    gap:clamp(28px,5vw,48px);
+    align-items:center;
+    background:var(--paper-card);
+    border:1px solid var(--paper-line);
+    border-radius:18px;
+    padding:clamp(24px,4vw,40px);
+    box-shadow:var(--shadow-card);
+  }
+  .featured-free-panel[hidden]{ display:none; }
+  @media (max-width:640px){
+    .featured-free-panel{ grid-template-columns:1fr; text-align:center; justify-items:center; }
+  }
+  .featured-free-cover{
+    width:100%;
+    max-width:200px;
+    aspect-ratio:2/3;
+    object-fit:cover;
+    border-radius:8px;
+    box-shadow:0 18px 32px -16px rgba(20,26,45,0.35);
+  }
+  .featured-free-copy .label{ color:var(--amber-deep); }
+  .featured-free-copy h2{
+    font-size:clamp(1.6rem,3.2vw,2.2rem);
+    margin:10px 0 12px;
+  }
+  .featured-free-copy p{ color:var(--ink-soft); max-width:52ch; }
+  .featured-free-copy .btn{ margin-top:20px; }
+
   .btn{
     display:inline-flex;
     align-items:center;
@@ -230,6 +263,14 @@
   .section-head h2{ font-size:clamp(1.9rem, 4vw, 2.6rem); }
   .section-head .label{ margin-bottom:10px; display:block; }
   .section-note{ max-width:38ch; color:var(--ink-soft); font-size:0.95rem; }
+  .library-intro-note{
+    max-width:64ch;
+    margin:-20px 0 32px;
+    color:var(--ink-soft);
+    font-size:0.95rem;
+  }
+  .library-intro-note a{ color:var(--blue); text-decoration:none; }
+  .library-intro-note a:hover{ text-decoration:underline; }
 
   /* ---------- Library grid ---------- */
   .library-grid{
@@ -534,6 +575,19 @@
     cursor:pointer;
   }
   .admin-type-option input{ cursor:pointer; }
+  .admin-checkbox-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--font-body);
+    font-size:0.9rem;
+    color:var(--ink);
+    text-transform:none;
+    letter-spacing:normal;
+    cursor:pointer;
+  }
+  .admin-checkbox-label input{ cursor:pointer; }
+  .admin-notify-field[hidden]{ display:none; }
   .field input[type="file"]{
     border:1px dashed var(--paper-line);
     background:transparent;
@@ -879,6 +933,20 @@
     </div>
   </section>
 
+  <section id="libro-gratis" class="featured-free">
+    <div class="wrap">
+      <div class="featured-free-panel" id="featured-free-panel" hidden>
+        <img class="featured-free-cover" id="featured-free-cover" src="" alt="">
+        <div class="featured-free-copy">
+          <span class="label">Free right now</span>
+          <h2 id="featured-free-title"></h2>
+          <p id="featured-free-blurb"></p>
+          <div id="featured-free-cta-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="libreria">
     <div class="wrap">
       <div class="section-head">
@@ -888,6 +956,7 @@
         </div>
         <p class="section-note">Every new book gets its own card here as soon as it's published.</p>
       </div>
+      <p class="library-intro-note" id="library-intro-note">Grab the free book above, leave a review, and you can unlock the next one too &mdash; plus an automatic email every time a new book comes out. <a href="#team-lettori">Here's how it works &rarr;</a></p>
       <div class="library-grid" id="library-grid"></div>
     </div>
   </section>
@@ -903,22 +972,22 @@
       <div class="arc-panel">
         <div class="arc-copy">
           <p>
-            I'm looking for a small group of dedicated readers to send free,
-            early PDF copies of my books to &mdash; in exchange for an honest
-            review once you've finished reading.
+            Right now I'm giving away one book completely free &mdash; grab it
+            above with just your email. Here's what happens after that.
           </p>
           <ol class="arc-steps">
-            <li><span class="num">1</span> Fill out the form here with your name and email.</li>
-            <li><span class="num">2</span> Get the free PDF of the selected book by email.</li>
-            <li><span class="num">3</span> Take your time reading it, then leave an honest review.</li>
-            <li><span class="num">4</span> Once you've left your review, you'll be able to download a second book for free &mdash; plus some extra bonus content.</li>
+            <li><span class="num">1</span> Download the free book with your name and email.</li>
+            <li><span class="num">2</span> Take your time reading it, then leave an honest review.</li>
+            <li><span class="num">3</span> Reach out here once you have, and I'll personally unlock a second book for you &mdash; no charge.</li>
+            <li><span class="num">4</span> Keep leaving reviews and I'll keep unlocking books, one at a time.</li>
+            <li><span class="num">5</span> You'll also get an email automatically every time I publish a brand new book.</li>
           </ol>
         </div>
         <div class="arc-card">
           <div>
-            <span class="label">Free book</span>
-            <h3>Early PDF copy</h3>
-            <p>No cost, no commitment beyond an honest review once you're done reading.</p>
+            <span class="label">Reader Team</span>
+            <h3>Get the free book, or unlock your next one</h3>
+            <p>Use this form for your first free copy, or to let me know you've left a review and are ready for the next book.</p>
           </div>
           <form class="arc-form" id="arc-form" novalidate>
             <div class="field">
@@ -1021,6 +1090,12 @@
               <input type="file" id="admin-pdf" name="pdf" accept="application/pdf">
               <span class="pdf-file-name" id="admin-pdf-name"></span>
             </div>
+            <div class="field admin-notify-field" id="admin-notify-field">
+              <label class="admin-checkbox-label">
+                <input type="checkbox" id="admin-notify-list" name="notify_list" checked>
+                Email the Reader Team about this new book
+              </label>
+            </div>
             <div class="admin-form-actions">
               <button type="submit" class="btn btn-primary" id="admin-submit-btn">Add to library</button>
               <button type="button" class="btn btn-ghost" id="admin-cancel-edit-btn" hidden>Cancel edit</button>
@@ -1064,7 +1139,7 @@
   <div class="download-modal-card">
     <button type="button" class="download-modal-close" id="download-modal-close" aria-label="Close">&times;</button>
     <h3 id="download-modal-title">Get the free PDF</h3>
-    <p class="section-note">One free book per email address. Enter yours and the download starts right away.</p>
+    <p class="section-note">One free book per email address. Enter yours and I'll email you the download link right away.</p>
     <form id="download-modal-form" novalidate>
       <input type="hidden" id="download-modal-book-id" name="book_id">
       <div class="field">
@@ -1202,6 +1277,38 @@
     applyRevealObserver();
   }
 
+  /* Big, prominent panel right below the hero for the one book currently
+     free to download — separate from the regular catalog grid so it can't
+     get lost among the paid titles. */
+  function renderFeaturedFreeBook(){
+    var section = document.getElementById('libro-gratis');
+    var panel = document.getElementById('featured-free-panel');
+    var freeBook = books.filter(function(b){ return b.type === 'free'; })[0];
+
+    if (!freeBook) {
+      panel.hidden = true;
+      return;
+    }
+
+    panel.hidden = false;
+    document.getElementById('featured-free-cover').src = freeBook.cover || '';
+    document.getElementById('featured-free-cover').alt = bookLabel(freeBook);
+    document.getElementById('featured-free-title').textContent = bookLabel(freeBook);
+    document.getElementById('featured-free-blurb').textContent = freeBook.blurb || '';
+
+    var ctaWrap = document.getElementById('featured-free-cta-wrap');
+    if (freeBook.hasPdf) {
+      ctaWrap.innerHTML =
+        '<button type="button" class="btn btn-primary featured-free-trigger" data-book-id="' + escapeHtml(freeBook.id) + '" data-book-title="' + escapeHtml(bookLabel(freeBook)) + '">' +
+        'Download the book for free <span class="arrow">&darr;</span></button>';
+    } else {
+      // L'autore non ha ancora caricato il PDF di questo libro: mostriamo
+      // comunque la vetrina, ma con un badge non cliccabile invece di un
+      // pulsante che non porterebbe a nulla.
+      ctaWrap.innerHTML = '<span class="btn btn-primary" aria-disabled="true" style="opacity:.55; pointer-events:none;">Coming soon</span>';
+    }
+  }
+
   /* =====================================================================
      FREE DOWNLOAD MODAL
      One click on a free book's "Download the PDF" button asks for an
@@ -1243,6 +1350,12 @@
     openDownloadModal(trigger.getAttribute('data-book-id'), trigger.getAttribute('data-book-title'));
   });
 
+  document.getElementById('featured-free-cta-wrap').addEventListener('click', function(evt){
+    var trigger = evt.target.closest('.featured-free-trigger');
+    if (!trigger) { return; }
+    openDownloadModal(trigger.getAttribute('data-book-id'), trigger.getAttribute('data-book-title'));
+  });
+
   downloadModalClose.addEventListener('click', closeDownloadModal);
   downloadModal.addEventListener('click', function(evt){
     if (evt.target.hasAttribute('data-close')) { closeDownloadModal(); }
@@ -1277,7 +1390,12 @@
       })
       .then(function(r){
         submitBtn.disabled = false;
-        if (r.ok && r.data && r.data.pdfUrl) {
+        if (r.ok && r.data && r.data.emailSent) {
+          downloadModalStatus.textContent = "Check your inbox — I just emailed you the download link.";
+          setTimeout(closeDownloadModal, 2500);
+        } else if (r.ok && r.data && r.data.pdfUrl) {
+          // Fallback finché l'invio email non è configurato lato Brevo:
+          // stesso comportamento di prima, download diretto dal sito.
           downloadModalStatus.textContent = "Here it comes — your download is starting.";
           window.location.href = r.data.pdfUrl;
           setTimeout(closeDownloadModal, 1200);
@@ -1297,15 +1415,21 @@
       });
   });
 
+  /* Il form "Join the Reader Team" regala una copia PDF gratuita: deve
+     quindi elencare solo i libri davvero impostati come gratis in questo
+     momento, non l'intero catalogo (la maggior parte è a pagamento su
+     Amazon). Se in futuro più libri diventano gratis, compaiono qui da
+     soli, senza bisogno di toccare il codice. */
   function populateBookSelect(){
     var select = document.getElementById('arc-book');
     var previous = select.value;
+    var freeBooks = books.filter(function(book){ return book.type === 'free'; });
     select.innerHTML = '';
     var anyOption = document.createElement('option');
     anyOption.value = '';
-    anyOption.textContent = 'Not sure / surprise me';
+    anyOption.textContent = freeBooks.length > 1 ? 'Not sure / surprise me' : 'Send me the free book';
     select.appendChild(anyOption);
-    books.forEach(function(book){
+    freeBooks.forEach(function(book){
       var opt = document.createElement('option');
       opt.value = String(book.id);
       opt.textContent = bookLabel(book);
@@ -1351,6 +1475,7 @@
 
   function refreshAll(){
     renderGrid();
+    renderFeaturedFreeBook();
     populateBookSelect();
     renderAdminList();
   }
@@ -1752,6 +1877,7 @@
     adminPdfName.textContent = '';
     adminSubmitBtn.textContent = 'Save changes';
     adminCancelEditBtn.hidden = false;
+    document.getElementById('admin-notify-field').hidden = true;
     adminStatus.textContent = 'Editing "' + bookLabel(book) + '". Leave cover/PDF empty to keep the current ones.';
     renderAdminList();
     adminAddForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1765,6 +1891,7 @@
     adminPdfName.textContent = '';
     adminSubmitBtn.textContent = 'Add to library';
     adminCancelEditBtn.hidden = true;
+    document.getElementById('admin-notify-field').hidden = false;
     renderAdminList();
   }
 
@@ -1800,6 +1927,10 @@
     formData.set('type', typeRadio ? typeRadio.value : 'paid');
     if (file) { formData.set('cover', file); }
     if (pdfFile) { formData.set('pdf', pdfFile); }
+    if (!isEditing) {
+      var notifyCheckbox = document.getElementById('admin-notify-list');
+      formData.set('notify_list', (notifyCheckbox && notifyCheckbox.checked) ? '1' : '');
+    }
 
     adminStatus.textContent = 'Saving…';
 
