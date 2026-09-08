@@ -899,6 +899,23 @@
     .hero-blob{ animation:none; }
   }
 </style>
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1438884908095576');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=1438884908095576&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->
 </head>
 <body>
 
@@ -1392,11 +1409,13 @@
       .then(function(r){
         submitBtn.disabled = false;
         if (r.ok && r.data && r.data.emailSent) {
+          if (typeof fbq === 'function') { fbq('track', 'Lead'); }
           downloadModalStatus.textContent = "Check your inbox — I just emailed you the download link.";
           setTimeout(closeDownloadModal, 2500);
         } else if (r.ok && r.data && r.data.pdfUrl) {
           // Fallback finché l'invio email non è configurato lato Brevo:
           // stesso comportamento di prima, download diretto dal sito.
+          if (typeof fbq === 'function') { fbq('track', 'Lead'); }
           downloadModalStatus.textContent = "Here it comes — your download is starting.";
           window.location.href = r.data.pdfUrl;
           setTimeout(closeDownloadModal, 1200);
@@ -1553,6 +1572,7 @@
       .then(function(r){
         submitBtn.disabled = false;
         if (r.ok) {
+          if (typeof fbq === 'function') { fbq('track', 'Lead'); }
           arcForm.reset();
           arcStatus.textContent = "Thanks! I've got your request — the free PDF will be on its way by email.";
         } else {
