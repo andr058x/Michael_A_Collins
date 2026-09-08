@@ -147,6 +147,7 @@ function ensureSchema(PDO $pdo): void {
     runRealCatalogMigration($pdo);
     runCoverPaddingFixMigration($pdo);
     runBookTitlesFixMigration($pdo);
+    runAllBooksFreeMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -352,6 +353,30 @@ function runBookTitlesFixMigration(PDO $pdo): void {
             $position++;
         }
     }
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
+/**
+ * Migrazione una tantum: su richiesta dell'autore, tutti i libri del
+ * catalogo passano da "a pagamento" a "gratis con download del PDF"
+ * (il limite di un download a testa via email, con possibilità di
+ * concedere download extra dal pannello, resta gestito da
+ * request_free_download / set_download_limit). Non tocca i libri che non
+ * hanno ancora un PDF caricato: restano "free" ma il pulsante di download
+ * non funzionerà finché l'autore non carica il PDF dal pannello (modifica
+ * libro -> campo PDF).
+ */
+function runAllBooksFreeMigration(PDO $pdo): void {
+    $migrationName = 'set_all_books_free_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    $pdo->exec("UPDATE books SET book_type = 'free' WHERE book_type <> 'free'");
 
     $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
 }
@@ -1077,6 +1102,32 @@ try {
             $stmt->execute([':email' => $email]);
 
             out(['ok' => true]);
+            break;
+
+        case 'set_download_limit':
+            // Imposta direttamente il numero totale di libri gratuiti che
+            // quell'indirizzo email può scaricare (1 = nessun extra, fino a
+            // un massimo di 5), invece di dover cliccare "+1" più volte.
+            // Usato ad esempio per dare 3-4-5 libri a chi lascia più
+            // recensioni.
+            requireAdmin();
+
+            $email = normalizeEmail((string) ($_POST['email'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                out(['error' => 'invalid_email'], 400);
+            }
+
+            $allowed = (int) ($_POST['allowed'] ?? 1);
+            $allowed = max(1, min(5, $allowed));
+            $extra = $allowed - 1;
+
+            $stmt = db()->prepare(
+                'INSERT INTO free_download_grants (email, extra_allowed) VALUES (:email, :extra)
+                 ON DUPLICATE KEY UPDATE extra_allowed = :extra2'
+            );
+            $stmt->execute([':email' => $email, ':extra' => $extra, ':extra2' => $extra]);
+
+            out(['ok' => true, 'allowed' => $allowed]);
             break;
 
         default:

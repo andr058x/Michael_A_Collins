@@ -358,6 +358,11 @@
   .book-link:hover{ color:var(--amber); }
   .book-link .arrow{ transition:transform .15s ease; }
   .book-link:hover .arrow{ transform:translateX(3px); }
+  .book-link-disabled{
+    color:var(--ink-faint);
+    cursor:default;
+    pointer-events:none;
+  }
   button.book-link{
     background:none;
     border:none;
@@ -696,6 +701,28 @@
   }
   .grant-btn:hover{ background:var(--blue); color:var(--blue-ink); }
   .grant-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .download-limit-form{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
+  }
+  .download-limit-form label{
+    font-family:var(--font-mono);
+    font-size:0.7rem;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .download-limit-form select{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:5px 8px;
+    background:var(--paper-card);
+    color:var(--ink);
+  }
   .admin-toggle{
     font-family:var(--font-mono);
     font-size:0.76rem;
@@ -1112,6 +1139,11 @@
     var ctaHtml;
     if (book.type === 'free' && book.hasPdf) {
       ctaHtml = '<button type="button" class="book-link book-download-trigger" data-book-id="' + escapeHtml(book.id) + '" data-book-title="' + escapeHtml(bookLabel(book)) + '">Download the PDF <span class="arrow">&darr;</span></button>';
+    } else if (book.type === 'free' && !book.hasPdf) {
+      // Il libro è impostato come gratis ma l'autore non ha ancora
+      // caricato il PDF dal pannello: meglio un badge non cliccabile che
+      // un link "morto" che punta a "#".
+      ctaHtml = '<span class="book-link book-link-disabled" aria-disabled="true">Coming soon</span>';
     } else if (book.type === 'paid') {
       ctaHtml = '<a class="book-link" href="' + escapeHtml(book.link || '#') + '" target="_blank" rel="noopener">Buy on Amazon <span class="arrow">&rarr;</span></a>';
     } else {
@@ -1565,6 +1597,11 @@
   function renderDownloadRow(dl){
     var row = document.createElement('div');
     row.className = 'request-row';
+    var options = [1, 2, 3, 4, 5].map(function(n){
+      var label = n === 1 ? '1 (default, no extra)' : n + ' total downloads';
+      var selected = Number(dl.allowed) === n ? ' selected' : '';
+      return '<option value="' + n + '"' + selected + '>' + label + '</option>';
+    }).join('');
     row.innerHTML =
       '<div class="request-row-top">' +
         '<div>' +
@@ -1574,7 +1611,11 @@
         '<div class="request-book">' + escapeHtml(dl.books || '') + '</div>' +
       '</div>' +
       '<div class="request-actions">' +
-        '<button type="button" class="grant-btn" data-email="' + escapeHtml(dl.email) + '">Grant +1 download</button>' +
+        '<div class="download-limit-form">' +
+          '<label for="limit-select-' + escapeHtml(dl.email) + '">Allow up to</label>' +
+          '<select class="download-limit-select" id="limit-select-' + escapeHtml(dl.email) + '" data-email="' + escapeHtml(dl.email) + '">' + options + '</select>' +
+          '<button type="button" class="grant-btn" data-email="' + escapeHtml(dl.email) + '">Save</button>' +
+        '</div>' +
       '</div>';
     return row;
   }
@@ -1606,10 +1647,13 @@
     var btn = evt.target.closest('.grant-btn[data-email]');
     if (!btn || btn.disabled) { return; }
     var email = btn.getAttribute('data-email');
+    var select = adminDownloadsList.querySelector('.download-limit-select[data-email="' + CSS.escape(email) + '"]');
+    var allowed = select ? select.value : '1';
 
     var body = new URLSearchParams();
-    body.set('action', 'grant_extra_download');
+    body.set('action', 'set_download_limit');
     body.set('email', email);
+    body.set('allowed', allowed);
 
     btn.disabled = true;
     fetch(API, { method: 'POST', credentials: 'same-origin', body: body })
