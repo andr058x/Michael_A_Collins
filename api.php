@@ -850,8 +850,7 @@ function reviewRequestEmailHtml(string $bookTitle, string $bookLink): string {
         '<p>It does not need to be long. Two or three honest sentences about what you liked (or did not) are more than enough — and it does not have to be five stars. I would rather have a real opinion than a polite one.</p>' .
         '<p><a href="' . $safeLink . '"><strong>Leave your review here</strong></a></p>' .
         '<p>One more thing: once you have left it, just reply to this email and let me know — I will personally unlock a second book from my library for you, completely free, as a thank-you.</p>' .
-        '<p>Thanks for reading,<br>Michael</p>' .
-        '<p style="color:#888;font-size:0.85em;">P.S. If you would like to mention in your review that you got the book for free, that is completely fine and honestly appreciated — it keeps things transparent. Totally your call, not a requirement.</p>';
+        '<p>Thanks for reading,<br>Michael</p>';
 }
 
 function rowToRequest(array $r): array {
