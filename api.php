@@ -146,6 +146,7 @@ function ensureSchema(PDO $pdo): void {
     );
     runRealCatalogMigration($pdo);
     runCoverPaddingFixMigration($pdo);
+    runBookTitlesFixMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -289,6 +290,64 @@ function runCoverPaddingFixMigration(PDO $pdo): void {
                     deleteCoverFile($row['cover']);
                     $update->execute([':cover' => $newCoverName, ':id' => $row['id']]);
                 }
+            }
+            $position++;
+        }
+    }
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
+/**
+ * Migrazione una tantum: i 10 libri del catalogo reale sono stati inseriti
+ * con il titolo vuoto di proposito (è già leggibile sulla copertina, quindi
+ * la scheda del libro non lo ripete). Il menu a tendina "Book you're
+ * interested in" nel form Reader Team, però, è testo puro e non può
+ * mostrare la copertina: senza un titolo mostrava 10 volte la stessa voce
+ * "Untitled book", rendendo impossibile scegliere il libro giusto. Qui
+ * scriviamo il titolo vero nel database (nello stesso ordine della
+ * migrazione del catalogo) solo per risolvere il menu — la scheda del
+ * libro continua a non ripetere il titolo quando c'è una copertina.
+ */
+function runBookTitlesFixMigration(PDO $pdo): void {
+    $migrationName = 'fix_missing_titles_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    $titles = [
+        'How to Create Passive Income Using AI',
+        'Chat to Code',
+        'AI Governance for Small Business',
+        'The AI-Powered Python Folder Automation Blueprint',
+        'ChatGPT Prompt Engineering',
+        'AI Office Integration Made Simple',
+        'Agentic AI for the Non Developer',
+        'Artificial Intelligence: Stop Feeling Left Behind by AI',
+        'The One-Person Business Machine',
+        'AI Agents for Leads and Sales',
+    ];
+
+    // Stessa cautela della migrazione delle copertine: se sono stati
+    // aggiunti o rimossi libri a mano dal pannello, meglio non toccare
+    // nulla piuttosto che assegnare per sbaglio un titolo a un libro
+    // aggiunto a mano.
+    $count = (int) $pdo->query('SELECT COUNT(*) FROM books WHERE is_sample = 0')->fetchColumn();
+    if ($count === 10) {
+        $rows = $pdo->query(
+            'SELECT id, title FROM books WHERE is_sample = 0 ORDER BY sort_order ASC, id ASC LIMIT 10'
+        )->fetchAll();
+
+        $update = $pdo->prepare('UPDATE books SET title = :title WHERE id = :id');
+        $position = 0;
+        foreach ($rows as $row) {
+            // Non sovrascrive un titolo che l'autore avesse già scritto a
+            // mano dal pannello nel frattempo.
+            if (($row['title'] ?? '') === '' && isset($titles[$position])) {
+                $update->execute([':title' => $titles[$position], ':id' => $row['id']]);
             }
             $position++;
         }
