@@ -147,6 +147,17 @@ function ensureSchema(PDO $pdo): void {
             KEY send_at_idx (sent, send_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
+    // "token" identifica in modo univoco l'email di richiesta recensione,
+    // così il pulsante "Ho lasciato la recensione" dentro quella mail può
+    // confermarla senza bisogno di un login. "confirmed_at" resta NULL
+    // finché non viene cliccato: da lì parte lo sblocco del libro
+    // successivo (vedi action=confirm_review più sotto).
+    if (!columnExists($pdo, 'review_email_queue', 'token')) {
+        $pdo->exec('ALTER TABLE review_email_queue ADD COLUMN token VARCHAR(64) DEFAULT NULL');
+    }
+    if (!columnExists($pdo, 'review_email_queue', 'confirmed_at')) {
+        $pdo->exec('ALTER TABLE review_email_queue ADD COLUMN confirmed_at DATETIME DEFAULT NULL');
+    }
 
     // Tabella delle migrazioni "una tantum" già applicate, per non ripetere
     // due volte un'operazione come "sostituisci il catalogo di prova con
@@ -822,14 +833,15 @@ function enqueueReviewEmail(PDO $pdo, string $email, string $name, string $bookT
     }
 
     $ins = $pdo->prepare(
-        'INSERT INTO review_email_queue (email, name, book_title, book_link, send_at)
-         VALUES (:email, :name, :title, :link, DATE_ADD(NOW(), INTERVAL ' . REVIEW_EMAIL_DELAY_DAYS . ' DAY))'
+        'INSERT INTO review_email_queue (email, name, book_title, book_link, token, send_at)
+         VALUES (:email, :name, :title, :link, :token, DATE_ADD(NOW(), INTERVAL ' . REVIEW_EMAIL_DELAY_DAYS . ' DAY))'
     );
     $ins->execute([
         ':email' => $email,
         ':name' => $name,
         ':title' => $bookTitle,
         ':link' => buildAmazonReviewLink($bookLink),
+        ':token' => bin2hex(random_bytes(16)),
     ]);
 }
 
@@ -859,17 +871,55 @@ function buildAmazonReviewLink(string $productLink): string {
  * chiede una recensione onesta — mai una recensione positiva, che le
  * regole di Amazon vietano di richiedere.
  */
-function reviewRequestEmailHtml(string $bookTitle, string $bookLink): string {
+function reviewRequestEmailHtml(string $bookTitle, string $bookLink, string $confirmUrl): string {
     $safeTitle = htmlspecialchars($bookTitle);
     $safeLink = htmlspecialchars($bookLink);
+    $safeConfirm = htmlspecialchars($confirmUrl);
     return '<p>Hi,</p>' .
         '<p>A little while ago you grabbed a free copy of <strong>' . $safeTitle . '</strong> — I hope you have had a chance to dig into it.</p>' .
         '<p>If you have, I would love to ask you for something small: an honest review on Amazon. It makes a real difference for an independent author — reviews are how new readers decide whether to trust a book they have never heard of.</p>' .
         '<p>One thing a lot of people do not realize: <strong>you do not need to have bought the book on Amazon to leave a review there.</strong> Amazon lets anyone with an account in good standing post what is called an "unverified" review — it just will not carry the little "Verified Purchase" badge, but it counts exactly the same and is completely within Amazon\'s rules.</p>' .
         '<p>It does not need to be long. Two or three honest sentences about what you liked (or did not) are more than enough — and it does not have to be five stars. I would rather have a real opinion than a polite one.</p>' .
         '<p><a href="' . $safeLink . '"><strong>Leave your review here</strong></a></p>' .
-        '<p>One more thing: once you have left it, just reply to this email and let me know — I will personally unlock a second book from my library for you, completely free, as a thank-you.</p>' .
+        '<p>Once you have left it, tap the button below and I will personally unlock the next book from my library for you, completely free, as a thank-you:</p>' .
+        '<p><a href="' . $safeConfirm . '" style="display:inline-block;padding:12px 22px;background:#12151F;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">I left my review — send my next book</a></p>' .
         '<p>Thanks for reading,<br>Michael</p>';
+}
+
+/**
+ * Piccolo output HTML (non JSON) per le pagine pubbliche di conferma
+ * recensione / scelta del prossimo libro: chi clicca il link dentro la
+ * mail arriva qui dal browser, non da codice, quindi la risposta deve
+ * essere una pagina leggibile e non un blob JSON. Sovrascrive
+ * l'header Content-Type impostato all'inizio del file.
+ */
+function outHtml(string $html, int $code = 200): void {
+    http_response_code($code);
+    header('Content-Type: text/html; charset=utf-8');
+    echo $html;
+    exit;
+}
+
+/** Involucro grafico condiviso dalle pagine confirm_review / claim_next_book,
+ *  con lo stesso stile scuro ed elegante del sito principale. */
+function brandPage(string $title, string $bodyHtml): string {
+    $safeTitle = htmlspecialchars($title);
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8">' .
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' .
+        '<title>' . $safeTitle . ' — Michael A. Collins</title>' .
+        '<style>' .
+        'body{margin:0;background:#0B0E16;color:#EEF1F8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:48px 20px;}' .
+        '.wrap{max-width:560px;margin:0 auto;}' .
+        'h1{font-family:Georgia,"Times New Roman",serif;font-size:1.6rem;margin:0 0 16px;}' .
+        'p{line-height:1.6;color:#A9B0C4;}' .
+        '.book{display:flex;gap:16px;align-items:center;background:#131826;border:1px solid #242B3E;border-radius:10px;padding:16px;margin:14px 0;text-decoration:none;color:#EEF1F8;}' .
+        '.book img{width:64px;height:96px;object-fit:cover;border-radius:4px;flex:none;}' .
+        '.book .cover-ph{width:64px;height:96px;border-radius:4px;flex:none;background:#1A2032;}' .
+        '.book .info{flex:1;min-width:0;}' .
+        '.book .title{font-weight:600;margin-bottom:4px;}' .
+        '.book .blurb{font-size:0.85rem;color:#8890A3;line-height:1.4;}' .
+        '.cta{display:inline-block;margin-top:8px;padding:6px 14px;background:#EEF1F8;color:#12151F;border-radius:6px;font-size:0.82rem;font-weight:600;}' .
+        '</style></head><body><div class="wrap">' . $bodyHtml . '</div></body></html>';
 }
 
 function rowToRequest(array $r): array {
@@ -1179,6 +1229,22 @@ try {
             }
             sendEmail($email, $name, 'Your free copy from Michael A. Collins', $readerHtml);
 
+            // Registra anche qui il libro nella stessa tabella usata dal
+            // download diretto dal catalogo (free_downloads), altrimenti il
+            // conteggio "quanti libri gratuiti ha già ricevuto questa
+            // persona" (usato dal catalogo "scegli il prossimo libro" dopo
+            // una recensione confermata) non saprebbe di questo primo
+            // libro arrivato tramite il modulo Reader Team.
+            if ($bookId && $requestedBook) {
+                $emailKeyForTracking = normalizeEmail($email);
+                $already = db()->prepare('SELECT 1 FROM free_downloads WHERE email = :email AND book_id = :book_id LIMIT 1');
+                $already->execute([':email' => $emailKeyForTracking, ':book_id' => $bookId]);
+                if (!$already->fetchColumn()) {
+                    db()->prepare('INSERT INTO free_downloads (email, book_id, book_title) VALUES (:email, :book_id, :book_title)')
+                        ->execute([':email' => $emailKeyForTracking, ':book_id' => $bookId, ':book_title' => $bookTitle]);
+                }
+            }
+
             // Contatto Brevo per l'automazione "chiedi la recensione dopo
             // qualche giorno" (configurata dentro Brevo, non qui).
             $bookLinkForBrevo = ($requestedBook && $requestedBook['link'] && $requestedBook['link'] !== '#')
@@ -1314,19 +1380,23 @@ try {
 
             $pdo = db();
             $due = $pdo->query(
-                'SELECT id, email, name, book_title, book_link FROM review_email_queue
+                'SELECT id, email, name, book_title, book_link, token FROM review_email_queue
                  WHERE sent = 0 AND send_at <= NOW()
                  ORDER BY send_at ASC
                  LIMIT 25'
             )->fetchAll();
 
+            $scheme = $isHttps ? 'https' : 'http';
+            $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+
             $sentCount = 0;
             foreach ($due as $row) {
+                $confirmUrl = $siteUrl . '/api.php?action=confirm_review&token=' . urlencode((string) $row['token']);
                 $ok = sendEmail(
                     $row['email'],
                     $row['name'] ?: '',
                     'Got a minute for an honest review?',
-                    reviewRequestEmailHtml($row['book_title'], $row['book_link'])
+                    reviewRequestEmailHtml($row['book_title'], $row['book_link'], $confirmUrl)
                 );
                 if ($ok) {
                     $sentCount++;
@@ -1338,6 +1408,158 @@ try {
             }
 
             out(['ok' => true, 'due' => count($due), 'sent' => $sentCount]);
+            break;
+
+        case 'confirm_review':
+            // Pagina pubblica raggiunta dal pulsante "I left my review —
+            // send my next book" dentro l'email di richiesta recensione.
+            // Nessun login: il token nell'URL identifica in modo univoco
+            // quella singola email/libro. Alla prima conferma sblocca un
+            // download gratuito extra e mostra il catalogo dei libri
+            // gratuiti non ancora ricevuti da questa persona, ciascuno
+            // cliccabile per riceverlo subito via email.
+            $token = trim((string) ($_GET['token'] ?? ''));
+            if ($token === '') {
+                outHtml(brandPage('Link not valid', '<h1>This link is not valid</h1><p>Please check the email again, or get in touch if the problem continues.</p>'), 400);
+            }
+
+            $pdo = db();
+            $stmt = $pdo->prepare('SELECT * FROM review_email_queue WHERE token = :token LIMIT 1');
+            $stmt->execute([':token' => $token]);
+            $row = $stmt->fetch();
+
+            if (!$row) {
+                outHtml(brandPage('Link not valid', '<h1>This link is not valid</h1><p>Please check the email again, or get in touch if the problem continues.</p>'), 404);
+            }
+
+            $email = (string) $row['email'];
+            $emailKey = normalizeEmail($email);
+
+            if ($row['confirmed_at'] === null) {
+                $pdo->prepare('UPDATE review_email_queue SET confirmed_at = NOW() WHERE id = :id')->execute([':id' => $row['id']]);
+                $pdo->prepare(
+                    'INSERT INTO free_download_grants (email, extra_allowed) VALUES (:email, 1)
+                     ON DUPLICATE KEY UPDATE extra_allowed = extra_allowed + 1'
+                )->execute([':email' => $emailKey]);
+            }
+
+            $scheme = $isHttps ? 'https' : 'http';
+            $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+
+            // Niente filtro su book_type qui apposta: il catalogo premio-
+            // recensione può regalare anche libri normalmente "Paid" (in
+            // vendita su Amazon), non solo quelli pubblicamente "Free" sul
+            // sito. L'unico requisito è che l'autore abbia caricato un PDF
+            // per quel libro dal pannello — anche se resta "Paid" per il
+            // resto del sito, quel PDF lo rende disponibile come premio
+            // privato dopo una recensione confermata.
+            $booksStmt = $pdo->prepare(
+                'SELECT id, title, blurb, cover FROM books
+                 WHERE pdf IS NOT NULL AND pdf <> ""
+                   AND id NOT IN (SELECT book_id FROM free_downloads WHERE email = :email AND book_id IS NOT NULL)
+                 ORDER BY sort_order ASC, id ASC'
+            );
+            $booksStmt->execute([':email' => $emailKey]);
+            $eligible = $booksStmt->fetchAll();
+
+            if (empty($eligible)) {
+                outHtml(brandPage('Thank you!', '<h1>Thank you!</h1><p>You have already claimed every book I currently have available this way — I really appreciate you taking the time to leave a review. When the next one is ready, you will be the first to hear about it.</p>'));
+            }
+
+            $cards = '';
+            foreach ($eligible as $b) {
+                $img = $b['cover']
+                    ? '<img src="' . htmlspecialchars($siteUrl . '/' . UPLOAD_URL . $b['cover']) . '" alt="">'
+                    : '<div class="cover-ph"></div>';
+                $claimUrl = htmlspecialchars($siteUrl . '/api.php?action=claim_next_book&token=' . urlencode($token) . '&book_id=' . (int) $b['id']);
+                $cards .= '<a class="book" href="' . $claimUrl . '">' . $img .
+                    '<div class="info"><div class="title">' . htmlspecialchars($b['title'] ?: 'Untitled') . '</div>' .
+                    '<div class="blurb">' . htmlspecialchars($b['blurb'] ?: '') . '</div>' .
+                    '<div class="cta">Send me this one &rarr;</div></div></a>';
+            }
+
+            outHtml(brandPage('Pick your next book', '<h1>Thank you for the review!</h1><p>As promised — pick your next free book below and I will send it straight to your inbox.</p>' . $cards));
+            break;
+
+        case 'claim_next_book':
+            // Secondo passo: dopo aver visto il catalogo in confirm_review,
+            // qui arriva il click su uno dei libri. Riusa la stessa tabella
+            // free_downloads e lo stesso limite (freeDownloadsUsed /
+            // freeDownloadExtraAllowed) del download diretto dal catalogo,
+            // così l'extra sbloccato sopra viene consumato in modo naturale
+            // e coerente con il resto del sistema.
+            $token = trim((string) ($_GET['token'] ?? ''));
+            $bookId = (int) ($_GET['book_id'] ?? 0);
+
+            if ($token === '' || !$bookId) {
+                outHtml(brandPage('Link not valid', '<h1>This link is not valid</h1><p>Please go back to the email and try again.</p>'), 400);
+            }
+
+            $pdo = db();
+            $stmt = $pdo->prepare('SELECT * FROM review_email_queue WHERE token = :token LIMIT 1');
+            $stmt->execute([':token' => $token]);
+            $row = $stmt->fetch();
+
+            if (!$row || $row['confirmed_at'] === null) {
+                outHtml(brandPage('Link not valid', '<h1>This link is not valid</h1><p>Please go back to the email and confirm your review first.</p>'), 404);
+            }
+
+            $email = (string) $row['email'];
+            $name = (string) ($row['name'] ?: '');
+            $emailKey = normalizeEmail($email);
+
+            $bookStmt = $pdo->prepare('SELECT id, title, link, pdf, book_type FROM books WHERE id = :id');
+            $bookStmt->execute([':id' => $bookId]);
+            $book = $bookStmt->fetch();
+
+            // Qui, a differenza di request_free_download, NON si controlla
+            // book_type: questo endpoint arriva solo dopo una recensione
+            // confermata (il token deve avere confirmed_at valorizzato,
+            // controllato sopra), quindi può regalare anche un libro
+            // "Paid" se l'autore gli ha caricato un PDF apposta per questo.
+            if (!$book || empty($book['pdf'])) {
+                outHtml(brandPage('Not available', '<h1>That book is not available</h1><p>Please go back to the email and pick another one from the list.</p>'), 404);
+            }
+
+            $alreadyHas = $pdo->prepare('SELECT 1 FROM free_downloads WHERE email = :email AND book_id = :book_id LIMIT 1');
+            $alreadyHas->execute([':email' => $emailKey, ':book_id' => $bookId]);
+            if ($alreadyHas->fetchColumn()) {
+                outHtml(brandPage('Already sent', '<h1>Already on its way!</h1><p>I already sent you this one — check your inbox (and spam folder, just in case).</p>'));
+            }
+
+            $used = freeDownloadsUsed($pdo, $emailKey);
+            $allowed = 1 + freeDownloadExtraAllowed($pdo, $emailKey);
+            if ($used >= $allowed) {
+                outHtml(brandPage('Not available right now', '<h1>Not available right now</h1><p>Something does not add up on our side — get in touch and let us know, and we will sort it out by hand.</p>'), 403);
+            }
+
+            $bookTitle = $book['title'] ?: ('Book #' . $book['id']);
+
+            $pdo->prepare('INSERT INTO free_downloads (email, book_id, book_title) VALUES (:email, :book_id, :book_title)')
+                ->execute([':email' => $emailKey, ':book_id' => $bookId, ':book_title' => $bookTitle]);
+
+            $scheme = $isHttps ? 'https' : 'http';
+            $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $downloadUrl = $siteUrl . '/' . PDF_UPLOAD_URL . $book['pdf'];
+
+            $readerHtml = '<p>Hi,</p>' .
+                '<p>Thank you again for the review — here is your next free copy of <strong>' . htmlspecialchars($bookTitle) . '</strong>:</p>' .
+                '<p><a href="' . htmlspecialchars($downloadUrl) . '">Download your copy</a></p>' .
+                '<p>Once you have had a chance to read this one, I would love another honest review — and yes, the book after this one too.</p>' .
+                '<p>Thanks,<br>Michael</p>';
+            sendEmail($email, $name, 'Your next free book from Michael A. Collins', $readerHtml);
+
+            sendEmail(
+                ADMIN_NOTIFY_EMAIL,
+                EMAIL_FROM_NAME,
+                'Review confirmed + next book claimed — ' . $bookTitle,
+                '<p><strong>' . htmlspecialchars($email) . '</strong> confirmed a review and claimed <strong>' . htmlspecialchars($bookTitle) . '</strong> as their next free book.</p>'
+            );
+
+            $bookLinkForBrevo = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
+            enqueueReviewEmail($pdo, $emailKey, $name, $bookTitle, $bookLinkForBrevo);
+
+            outHtml(brandPage('Check your inbox!', '<h1>On its way!</h1><p><strong>' . htmlspecialchars($bookTitle) . '</strong> just landed in your inbox. Thanks again for the review — it really does make a difference.</p>'));
             break;
 
         case 'list_free_downloads':
