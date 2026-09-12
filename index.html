@@ -1185,6 +1185,22 @@ src="https://www.facebook.com/tr?id=1438884908095576&ev=PageView&noscript=1"
   /* Same folder as this page, on your hosting. */
   var API = 'api.php';
 
+  /* =====================================================================
+     PRE-FILLED EMAIL FROM A LINK
+     If a visitor arrives from a link that already knows their email (for
+     example the "one more book" follow-up email), the link looks like
+     https://yoursite/?email=name%40example.com#libreria and this reads
+     that value once, so the download and Reader Team forms below can be
+     pre-filled with it instead of leaving the visitor to retype it. It's
+     just a convenience: nothing is submitted automatically, every form
+     still validates and sends the email normally when the visitor clicks
+     the button.
+     ===================================================================== */
+  var prefillEmail = '';
+  try {
+    prefillEmail = (new URLSearchParams(window.location.search).get('email') || '').trim();
+  } catch (e) { prefillEmail = ''; }
+
   function escapeHtml(str){
     return String(str == null ? '' : str)
       .replace(/&/g, '&amp;')
@@ -1347,7 +1363,12 @@ src="https://www.facebook.com/tr?id=1438884908095576&ev=PageView&noscript=1"
     downloadModalBookId.value = bookId;
     downloadModalTitle.textContent = 'Get "' + bookTitle + '"';
     downloadModal.hidden = false;
-    downloadModalEmail.focus();
+    if (prefillEmail) {
+      downloadModalEmail.value = prefillEmail;
+      downloadModalForm.querySelector('button[type="submit"]').focus();
+    } else {
+      downloadModalEmail.focus();
+    }
   }
 
   function closeDownloadModal(){
@@ -1541,6 +1562,10 @@ src="https://www.facebook.com/tr?id=1438884908095576&ev=PageView&noscript=1"
      ===================================================================== */
   var arcForm = document.getElementById('arc-form');
   var arcStatus = document.getElementById('arc-status');
+
+  if (prefillEmail) {
+    document.getElementById('arc-email').value = prefillEmail;
+  }
 
   arcForm.addEventListener('submit', function(evt){
     evt.preventDefault();
