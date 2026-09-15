@@ -177,6 +177,7 @@ function ensureSchema(PDO $pdo): void {
     runClearAuthorTestDownloadMigration($pdo);
     runSendAuthorReviewEmailNowMigration($pdo);
     runBackfillBrevoBookAttributesMigration($pdo);
+    runBackfillBrevoBookAttributesV2Migration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -508,6 +509,31 @@ function runSendAuthorReviewEmailNowMigration(PDO $pdo): void {
 }
 
 /**
+ * Link da mandare a Brevo come attributo BOOK_LINK, usato nell'email
+ * dell'automazione "Reader Team" per far scaricare il libro al lettore.
+ * Per i libri con un PDF caricato (i "lead magnet" gratuiti, incluso "How
+ * to Create Passive Income Using AI" promosso dalla campagna Meta Ads)
+ * usa il vero link di download — lo stesso costruito per l'email di
+ * conferma del sito, vedi $downloadUrl più sotto — perché per questi
+ * libri books.link resta vuoto/'#' (non hanno una pagina prodotto
+ * esterna). Per un libro a pagamento senza PDF usa invece books.link (di
+ * solito la pagina Amazon). Se non c'è né un PDF né un link valido, torna
+ * stringa vuota: l'email dell'automazione gestisce già il caso "nessun
+ * link". NON va confusa con il link usato da enqueueReviewEmail(), che
+ * deve restare quello Amazon (serve a costruire il link "scrivi una
+ * recensione") anche quando questo qui punta al PDF.
+ */
+function bookLinkForBrevoAttribute(string $siteUrl, array $book): string {
+    if (!empty($book['pdf'])) {
+        return $siteUrl . '/' . PDF_UPLOAD_URL . $book['pdf'];
+    }
+    if (!empty($book['link']) && $book['link'] !== '#') {
+        return (string) $book['link'];
+    }
+    return '';
+}
+
+/**
  * Migrazione una tantum: gli attributi personalizzati BOOK_TITLE e
  * BOOK_LINK usati dall'automazione Brevo "Reader Team" sono stati creati
  * nell'account Brevo solo oggi — prima non esistevano, quindi
@@ -569,6 +595,79 @@ function runBackfillBrevoBookAttributesMigration(PDO $pdo): void {
             if ($book) {
                 $bookTitle = $book['title'] ?: $bookTitle;
                 $bookLink = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
+            }
+        }
+
+        if ($bookTitle === '') {
+            continue;
+        }
+
+        addBrevoContact($email, (string) $event['name'], $bookTitle, $bookLink);
+    }
+}
+
+/**
+ * Migrazione una tantum: la v1 qui sopra popolava BOOK_LINK usando solo
+ * books.link, che per i libri gratuiti con PDF (il caso più comune: è il
+ * "lead magnet" della campagna Meta Ads) resta '#' — quindi i contatti
+ * già aggiornati dalla v1 si sono ritrovati con BOOK_LINK vuoto proprio
+ * per il libro più richiesto. Rifà lo stesso backfill usando
+ * bookLinkForBrevoAttribute(), che per i libri con PDF manda il vero link
+ * di download invece di books.link. Come la v1, non manda nessuna email:
+ * aggiorna solo gli attributi del contatto su Brevo, quindi è sicura da
+ * rilanciare anche più volte.
+ */
+function runBackfillBrevoBookAttributesV2Migration(PDO $pdo): void {
+    $migrationName = 'backfill_brevo_book_attributes_v2';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    // Stesso motivo della v1: segniamo la migrazione come applicata subito,
+    // prima del ciclo di chiamate API una per una.
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+
+    if (BREVO_API_KEY === '') {
+        return;
+    }
+
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $scheme = $isHttps ? 'https' : 'http';
+    $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'michaelcollins.pro');
+
+    $events = $pdo->query(
+        "SELECT email, book_id, book_title, created_at, '' AS name FROM free_downloads
+         UNION ALL
+         SELECT email, book_id, book AS book_title, created_at, name FROM reader_requests"
+    )->fetchAll();
+
+    $latestByEmail = [];
+    foreach ($events as $event) {
+        $email = normalizeEmail((string) $event['email']);
+        if ($email === '') {
+            continue;
+        }
+        if (!isset($latestByEmail[$email]) || $event['created_at'] > $latestByEmail[$email]['created_at']) {
+            $latestByEmail[$email] = $event;
+        }
+    }
+
+    $bookStmt = $pdo->prepare('SELECT title, link, pdf FROM books WHERE id = :id');
+
+    foreach ($latestByEmail as $email => $event) {
+        $bookTitle = (string) $event['book_title'];
+        $bookLink = '';
+
+        if (!empty($event['book_id'])) {
+            $bookStmt->execute([':id' => (int) $event['book_id']]);
+            $book = $bookStmt->fetch();
+            if ($book) {
+                $bookTitle = $book['title'] ?: $bookTitle;
+                $bookLink = bookLinkForBrevoAttribute($siteUrl, $book);
             }
         }
 
@@ -1406,12 +1505,18 @@ try {
             }
 
             // Contatto Brevo per l'automazione "chiedi la recensione dopo
-            // qualche giorno" (configurata dentro Brevo, non qui).
-            $bookLinkForBrevo = ($requestedBook && $requestedBook['link'] && $requestedBook['link'] !== '#')
+            // qualche giorno" (configurata dentro Brevo, non qui). Il link
+            // per l'attributo BOOK_LINK (bookLinkForBrevo, usato nell'email
+            // dell'automazione per scaricare il libro) e quello per
+            // enqueueReviewEmail() (bookLinkForReview, deve restare il link
+            // prodotto Amazon per costruire il link "scrivi una recensione")
+            // sono cose diverse: vedi bookLinkForBrevoAttribute().
+            $bookLinkForBrevo = $requestedBook ? bookLinkForBrevoAttribute($siteUrl, $requestedBook) : '';
+            $bookLinkForReview = ($requestedBook && $requestedBook['link'] && $requestedBook['link'] !== '#')
                 ? $requestedBook['link']
                 : '';
             addBrevoContact($email, $name, $bookTitle, $bookLinkForBrevo);
-            enqueueReviewEmail(db(), $email, $name, $bookTitle, $bookLinkForBrevo);
+            enqueueReviewEmail(db(), $email, $name, $bookTitle, $bookLinkForReview);
 
             out(['ok' => true]);
             break;
@@ -1509,9 +1614,16 @@ try {
             // un libro gratis direttamente dal catalogo, non solo per chi
             // passa dal form Reader Team. Il modulo di download chiede solo
             // l'email (non il nome), quindi FIRSTNAME resta vuoto qui.
-            $bookLinkForBrevo = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
+            // bookLinkForBrevo (attributo BOOK_LINK, per l'email
+            // dell'automazione) e bookLinkForReview (per enqueueReviewEmail,
+            // deve restare il link prodotto Amazon) sono cose diverse: vedi
+            // bookLinkForBrevoAttribute().
+            $scheme = $isHttps ? 'https' : 'http';
+            $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $bookLinkForBrevo = bookLinkForBrevoAttribute($siteUrl, $book);
+            $bookLinkForReview = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
             addBrevoContact($email, '', $bookTitle, $bookLinkForBrevo);
-            enqueueReviewEmail($pdo, $email, '', $bookTitle, $bookLinkForBrevo);
+            enqueueReviewEmail($pdo, $email, '', $bookTitle, $bookLinkForReview);
 
             // Il libro non si scarica più direttamente dal sito: il link
             // arriva via email (tramite Brevo), così il lettore deve avere
