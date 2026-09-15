@@ -174,6 +174,7 @@ function ensureSchema(PDO $pdo): void {
     runBookTitlesFixMigration($pdo);
     runAllBooksFreeMigration($pdo);
     runFeatureSingleFreeBookMigration($pdo);
+    runClearAuthorTestDownloadMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -431,6 +432,28 @@ function runFeatureSingleFreeBookMigration(PDO $pdo): void {
         ->execute([':title' => $featuredTitle]);
     $pdo->prepare("UPDATE books SET book_type = 'free' WHERE title = :title")
         ->execute([':title' => $featuredTitle]);
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
+/**
+ * Migrazione una tantum: durante i test di oggi (fix del bug che rompeva
+ * il download gratuito) l'autore ha usato la propria email vera, che è
+ * quindi finita in free_downloads come "download già usato". La togliamo
+ * di nuovo così può provare il flusso da lettore reale, senza sbloccare
+ * un limite per chiunque altro.
+ */
+function runClearAuthorTestDownloadMigration(PDO $pdo): void {
+    $migrationName = 'clear_author_test_download_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    $pdo->prepare('DELETE FROM free_downloads WHERE email = :email')
+        ->execute([':email' => 'andrea.mirenna@gmail.com']);
 
     $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
 }
