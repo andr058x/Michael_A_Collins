@@ -647,9 +647,18 @@ function sendEmail(string $toEmail, string $toName, string $subject, string $htm
         return false;
     }
 
+    // Brevo rifiuta la richiesta (400 "name is missing in to") se il campo
+    // "name" del destinatario è presente ma vuoto: quando non abbiamo un
+    // nome (es. download libro gratuito dove l'utente inserisce solo la
+    // mail) va omesso del tutto, non mandato come stringa vuota.
+    $toEntry = ['email' => $toEmail];
+    if (trim($toName) !== '') {
+        $toEntry['name'] = $toName;
+    }
+
     $payload = json_encode([
         'sender' => ['email' => EMAIL_FROM_ADDRESS, 'name' => EMAIL_FROM_NAME],
-        'to' => [['email' => $toEmail, 'name' => $toName]],
+        'to' => [$toEntry],
         'subject' => $subject,
         'htmlContent' => $htmlBody,
     ]);
