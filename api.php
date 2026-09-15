@@ -176,6 +176,7 @@ function ensureSchema(PDO $pdo): void {
     runFeatureSingleFreeBookMigration($pdo);
     runClearAuthorTestDownloadMigration($pdo);
     runSendAuthorReviewEmailNowMigration($pdo);
+    runBackfillBrevoBookAttributesMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -504,6 +505,79 @@ function runSendAuthorReviewEmailNowMigration(PDO $pdo): void {
     }
 
     $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
+/**
+ * Migrazione una tantum: gli attributi personalizzati BOOK_TITLE e
+ * BOOK_LINK usati dall'automazione Brevo "Reader Team" sono stati creati
+ * nell'account Brevo solo oggi — prima non esistevano, quindi
+ * addBrevoContact() li mandava a vuoto per tutti i contatti già iscritti.
+ * Qui li ripopoliamo per chi è già dentro la lista, prendendo per ogni
+ * email l'evento più recente tra un download diretto dal catalogo
+ * (free_downloads) e una richiesta dal modulo "Join the Reader Team"
+ * (reader_requests), esattamente come avrebbe fatto addBrevoContact() al
+ * momento giusto. Non manda nessuna email: aggiorna solo gli attributi del
+ * contatto su Brevo, quindi è sicura da rilanciare anche più volte (anche
+ * se il flag "migrations" la blocca comunque dopo la prima).
+ */
+function runBackfillBrevoBookAttributesMigration(PDO $pdo): void {
+    $migrationName = 'backfill_brevo_book_attributes_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    // Segniamo la migrazione come applicata SUBITO, prima del ciclo: con
+    // decine di contatti da aggiornare uno per uno via API, in caso di
+    // rallentamenti di rete è meglio completarne il più possibile in
+    // questa richiesta piuttosto che rischiare un ciclo infinito di
+    // ritentativi se il tempo massimo di esecuzione di PHP scade a metà.
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+
+    if (BREVO_API_KEY === '') {
+        return;
+    }
+
+    $events = $pdo->query(
+        "SELECT email, book_id, book_title, created_at, '' AS name FROM free_downloads
+         UNION ALL
+         SELECT email, book_id, book AS book_title, created_at, name FROM reader_requests"
+    )->fetchAll();
+
+    $latestByEmail = [];
+    foreach ($events as $event) {
+        $email = normalizeEmail((string) $event['email']);
+        if ($email === '') {
+            continue;
+        }
+        if (!isset($latestByEmail[$email]) || $event['created_at'] > $latestByEmail[$email]['created_at']) {
+            $latestByEmail[$email] = $event;
+        }
+    }
+
+    $bookStmt = $pdo->prepare('SELECT title, link FROM books WHERE id = :id');
+
+    foreach ($latestByEmail as $email => $event) {
+        $bookTitle = (string) $event['book_title'];
+        $bookLink = '';
+
+        if (!empty($event['book_id'])) {
+            $bookStmt->execute([':id' => (int) $event['book_id']]);
+            $book = $bookStmt->fetch();
+            if ($book) {
+                $bookTitle = $book['title'] ?: $bookTitle;
+                $bookLink = ($book['link'] && $book['link'] !== '#') ? $book['link'] : '';
+            }
+        }
+
+        if ($bookTitle === '') {
+            continue;
+        }
+
+        addBrevoContact($email, (string) $event['name'], $bookTitle, $bookLink);
+    }
 }
 
 function out($data, int $code = 200): void {
