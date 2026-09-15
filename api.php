@@ -175,6 +175,7 @@ function ensureSchema(PDO $pdo): void {
     runAllBooksFreeMigration($pdo);
     runFeatureSingleFreeBookMigration($pdo);
     runClearAuthorTestDownloadMigration($pdo);
+    runSendAuthorReviewEmailNowMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -454,6 +455,53 @@ function runClearAuthorTestDownloadMigration(PDO $pdo): void {
 
     $pdo->prepare('DELETE FROM free_downloads WHERE email = :email')
         ->execute([':email' => 'andrea.mirenna@gmail.com']);
+
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+}
+
+/**
+ * Migrazione una tantum: l'autore vuole vedere subito, senza aspettare
+ * REVIEW_EMAIL_DELAY_DAYS giorni, la seconda email del flusso lettore —
+ * quella che chiede la recensione e offre di sbloccare il libro
+ * successivo. Prende la richiesta già in coda (review_email_queue) per la
+ * sua email, la spedisce adesso invece di aspettare il Cron Job, e la
+ * segna come spedita così il Cron Job non la rimanda una seconda volta.
+ */
+function runSendAuthorReviewEmailNowMigration(PDO $pdo): void {
+    $migrationName = 'send_author_review_email_now_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+
+    $rows = $pdo->prepare(
+        'SELECT id, email, name, book_title, book_link, token FROM review_email_queue
+         WHERE email = :email AND sent = 0
+         ORDER BY id ASC'
+    );
+    $rows->execute([':email' => 'andrea.mirenna@gmail.com']);
+
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $scheme = $isHttps ? 'https' : 'http';
+    $siteUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'michaelcollins.pro');
+
+    foreach ($rows->fetchAll() as $row) {
+        $confirmUrl = $siteUrl . '/api.php?action=confirm_review&token=' . urlencode((string) $row['token']);
+        $ok = sendEmail(
+            $row['email'],
+            $row['name'] ?: '',
+            'Got a minute for an honest review?',
+            reviewRequestEmailHtml($row['book_title'], $row['book_link'], $confirmUrl)
+        );
+        if ($ok) {
+            $pdo->prepare('UPDATE review_email_queue SET sent = 1 WHERE id = :id')->execute([':id' => $row['id']]);
+        } else {
+            error_log('runSendAuthorReviewEmailNowMigration: sendEmail failed for queue row ' . $row['id']);
+        }
+    }
 
     $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
 }
