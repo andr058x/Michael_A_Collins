@@ -1341,33 +1341,45 @@ try {
                 out(['error' => 'not_available'], 404);
             }
 
+            // L'autore stesso è esentato dal limite "un download gratis a
+            // testa": deve poter riprovare il flusso quante volte serve per
+            // fare un test, senza dover chiedere ogni volta di sbloccare di
+            // nuovo la propria email da free_downloads.
+            $isAuthorTesting = ($email === normalizeEmail(ADMIN_NOTIFY_EMAIL));
+
             $used = freeDownloadsUsed($pdo, $email);
             $allowed = 1 + freeDownloadExtraAllowed($pdo, $email);
 
-            if ($used >= $allowed) {
+            if ($used >= $allowed && !$isAuthorTesting) {
                 out(['error' => 'limit_reached'], 403);
             }
 
             $bookTitle = $book['title'] ?: ('Book #' . $book['id']);
 
-            $ins = $pdo->prepare(
-                'INSERT INTO free_downloads (email, book_id, book_title) VALUES (:email, :book_id, :book_title)'
-            );
-            $ins->execute([
-                ':email' => $email,
-                ':book_id' => (int) $book['id'],
-                ':book_title' => $bookTitle,
-            ]);
+            // Per l'autore non registriamo il download in free_downloads
+            // (altrimenti si riattiverebbe comunque il limite al giro
+            // successivo) e non mandiamo la notifica "download usato" per
+            // non riempirsi la casella di mail di test a se stesso.
+            if (!$isAuthorTesting) {
+                $ins = $pdo->prepare(
+                    'INSERT INTO free_downloads (email, book_id, book_title) VALUES (:email, :book_id, :book_title)'
+                );
+                $ins->execute([
+                    ':email' => $email,
+                    ':book_id' => (int) $book['id'],
+                    ':book_title' => $bookTitle,
+                ]);
 
-            // Notifica silenziosa all'autore: se Brevo non è configurato,
-            // sendEmail non fa nulla e il download prosegue comunque.
-            sendEmail(
-                ADMIN_NOTIFY_EMAIL,
-                EMAIL_FROM_NAME,
-                'Free download used — ' . $bookTitle,
-                '<p><strong>' . htmlspecialchars($email) . '</strong> just used a free download for <strong>' . htmlspecialchars($bookTitle) . '</strong>.</p>' .
-                '<p>Downloads used so far by this address: ' . ($used + 1) . ' of ' . $allowed . ' allowed.</p>'
-            );
+                // Notifica silenziosa all'autore: se Brevo non è configurato,
+                // sendEmail non fa nulla e il download prosegue comunque.
+                sendEmail(
+                    ADMIN_NOTIFY_EMAIL,
+                    EMAIL_FROM_NAME,
+                    'Free download used — ' . $bookTitle,
+                    '<p><strong>' . htmlspecialchars($email) . '</strong> just used a free download for <strong>' . htmlspecialchars($bookTitle) . '</strong>.</p>' .
+                    '<p>Downloads used so far by this address: ' . ($used + 1) . ' of ' . $allowed . ' allowed.</p>'
+                );
+            }
 
             // Stesso contatto/lista Brevo usato dal form "Join the Reader
             // Team": così l'automazione "chiedi la recensione dopo qualche
