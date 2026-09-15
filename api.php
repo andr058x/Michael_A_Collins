@@ -669,7 +669,10 @@ function sendEmail(string $toEmail, string $toName, string $subject, string $htm
     $result = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlErr = curl_error($ch);
-    curl_close($ch);
+    // curl_close() non serve più dal PHP 8.0 (è un no-op) e dal PHP 8.5
+    // genera un avviso "deprecated": se PHP mostra gli avvisi in output,
+    // quell'avviso finisce dentro la risposta JSON e la rompe, causando
+    // "Couldn't process that" anche quando l'invio va a buon fine.
 
     if ($status < 200 || $status >= 300) {
         error_log('sendEmail failed (status ' . $status . '): ' . ($curlErr ?: $result));
@@ -717,7 +720,8 @@ function addBrevoContact(string $email, string $name, string $bookTitle, string 
     $result = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlErr = curl_error($ch);
-    curl_close($ch);
+    // curl_close() rimossa: no-op dal PHP 8.0, "deprecated" dal PHP 8.5 —
+    // vedi commento nella stessa forma in sendEmail() più sopra.
 
     if ($status < 200 || $status >= 300) {
         error_log('addBrevoContact failed (status ' . $status . '): ' . ($curlErr ?: $result));
@@ -774,7 +778,8 @@ function sendBrevoNewBookCampaign(string $bookTitle, string $bookBlurb, ?string 
     $result = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlErr = curl_error($ch);
-    curl_close($ch);
+    // curl_close() rimossa: no-op dal PHP 8.0, "deprecated" dal PHP 8.5 —
+    // vedi commento nella stessa forma in sendEmail() più sopra.
 
     if ($status < 200 || $status >= 300) {
         error_log('sendBrevoNewBookCampaign create failed (status ' . $status . '): ' . ($curlErr ?: $result));
@@ -801,7 +806,8 @@ function sendBrevoNewBookCampaign(string $bookTitle, string $bookBlurb, ?string 
     $result2 = curl_exec($ch2);
     $status2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
     $curlErr2 = curl_error($ch2);
-    curl_close($ch2);
+    // curl_close() rimossa: no-op dal PHP 8.0, "deprecated" dal PHP 8.5 —
+    // vedi commento nella stessa forma in sendEmail() più sopra.
 
     if ($status2 < 200 || $status2 >= 300) {
         error_log('sendBrevoNewBookCampaign sendNow failed (status ' . $status2 . '): ' . ($curlErr2 ?: $result2));
