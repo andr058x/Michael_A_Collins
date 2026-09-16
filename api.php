@@ -178,6 +178,7 @@ function ensureSchema(PDO $pdo): void {
     runSendAuthorReviewEmailNowMigration($pdo);
     runBackfillBrevoBookAttributesMigration($pdo);
     runBackfillBrevoBookAttributesV2Migration($pdo);
+    runDebugBrevoBacklogDiagnosticsMigration($pdo);
 
     static $checkedSeed = false;
     if ($checkedSeed) {
@@ -676,6 +677,53 @@ function runBackfillBrevoBookAttributesV2Migration(PDO $pdo): void {
         }
 
         addBrevoContact($email, (string) $event['name'], $bookTitle, $bookLink);
+    }
+}
+
+/**
+ * Migrazione diagnostica una tantum, temporanea: capire perché alcuni
+ * contatti già dentro la lista Brevo (es. Moses Belton, Keshawn Timmerman)
+ * risultano ancora con BOOK_TITLE/BOOK_LINK vuoti dopo la v1 e la v2 qui
+ * sopra. Non modifica nulla: scrive solo nei log di Railway (error_log)
+ * quante righe ci sono in free_downloads/reader_requests e, per un
+ * campione di email note, quale sarebbe l'evento "più recente" trovato
+ * dalla stessa logica di backfill. Va rimossa una volta capito il motivo.
+ */
+function runDebugBrevoBacklogDiagnosticsMigration(PDO $pdo): void {
+    $migrationName = 'debug_brevo_backlog_diagnostics_v1';
+
+    $check = $pdo->prepare('SELECT 1 FROM migrations WHERE name = :name');
+    $check->execute([':name' => $migrationName]);
+    if ($check->fetchColumn()) {
+        return;
+    }
+    $pdo->prepare('INSERT INTO migrations (name) VALUES (:name)')->execute([':name' => $migrationName]);
+
+    $fdCount = (int) $pdo->query('SELECT COUNT(*) FROM free_downloads')->fetchColumn();
+    $rrCount = (int) $pdo->query('SELECT COUNT(*) FROM reader_requests')->fetchColumn();
+    error_log('DEBUG_BREVO_BACKLOG: free_downloads=' . $fdCount . ' reader_requests=' . $rrCount);
+
+    $sampleEmails = [
+        'beltonmoses29@gmail.com',
+        'brooklynborn97@gmail.com',
+        'mikebutler714@yahoo.com',
+        'ginolollobrigido@mirenna.it',
+    ];
+
+    foreach ($sampleEmails as $sampleEmail) {
+        $normalized = normalizeEmail($sampleEmail);
+
+        $fdRows = $pdo->prepare('SELECT book_id, book_title, created_at FROM free_downloads WHERE email = :email ORDER BY created_at DESC');
+        $fdRows->execute([':email' => $normalized]);
+        $fd = $fdRows->fetchAll();
+
+        $rrRows = $pdo->prepare('SELECT book_id, book AS book_title, created_at, name FROM reader_requests WHERE email = :email ORDER BY created_at DESC');
+        $rrRows->execute([':email' => $normalized]);
+        $rr = $rrRows->fetchAll();
+
+        error_log('DEBUG_BREVO_BACKLOG email=' . $normalized
+            . ' free_downloads=' . json_encode($fd)
+            . ' reader_requests=' . json_encode($rr));
     }
 }
 
